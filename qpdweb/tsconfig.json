@@ -1,0 +1,22 @@
+{
+  "compilerOptions": {
+    "strict": false,
+    "strictNullChecks": true,
+    "esModuleInterop": true,
+    "jsx": "react-jsx",
+    "target": "ESNext",
+    "module": "ESNext",
+    "moduleResolution": "Bundler",
+    "skipLibCheck": true,
+    "baseUrl": ".",
+    "paths": {
+      "~/*": ["src/*"]
+    },
+    "types": ["vite/client", "node", "vite-plugin-svgr/client"]
+  },
+  "include": [
+    "src/**/*",
+    "global.d.ts",
+    "vite-env.d.ts"
+  ]
+}

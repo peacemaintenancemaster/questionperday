@@ -1,0 +1,184 @@
+/* Dark mode overrides */
+/* StyleX uses CSS vars under the hood. We override the generated vars via
+   attribute selector on <html data-theme="dark">. Because StyleX hashes var
+   names at build time, we instead apply a global CSS invert-layer approach
+   that targets semantic elements. */
+
+html[data-theme='dark'] {
+	color-scheme: dark;
+}
+
+html[data-theme='dark'] body {
+	background-color: #0d1117;
+	color: #e6edf3;
+}
+
+/* Root layout & wrappers */
+html[data-theme='dark'] main {
+	background-color: #0d1117;
+}
+
+html[data-theme='dark'] header {
+	background-color: #0d1117 !important;
+}
+
+html[data-theme='dark'] section {
+	color: #e6edf3;
+}
+
+/* Promotion banner */
+html[data-theme='dark'] [data-promotion] {
+	background-color: #161b22 !important;
+}
+
+html[data-theme='dark'] [data-promotion] h3 {
+	color: #e6edf3;
+}
+
+html[data-theme='dark'] [data-promotion] p {
+	color: #8b949e;
+}
+
+/* Calendar header text */
+html[data-theme='dark'] [data-calendar] h5 {
+	color: #e6edf3;
+}
+
+html[data-theme='dark'] [data-calendar] [data-today-btn] {
+	background-color: rgba(44, 90, 255, 0.2);
+}
+
+/* Calendar section border */
+html[data-theme='dark'] [data-calendar-wrap] {
+	border-bottom-color: #21262d !important;
+}
+
+/* Calendar arrow buttons */
+html[data-theme='dark'] [data-calendar] svg {
+	stroke: #e6edf3;
+}
+
+/* Calendar cells */
+html[data-theme='dark'] [data-cell] {
+	color: #e6edf3 !important;
+}
+
+html[data-theme='dark'] [data-cell-gray] {
+	color: #484f58 !important;
+}
+
+html[data-theme='dark'] [data-cell-white] {
+	color: #ffffff !important;
+}
+
+/* Answer section title */
+html[data-theme='dark'] [data-primary-black] {
+	color: #e6edf3 !important;
+}
+
+/* Answer card */
+html[data-theme='dark'] [data-answer-card] {
+	border-color: #2c5aff !important;
+	background-color: #161b22 !important;
+}
+
+html[data-theme='dark'] [data-answer-card] [data-answer-text] {
+	color: #8b949e;
+}
+
+/* Answer card title */
+html[data-theme='dark'] [data-answer-card] [data-answer-title] {
+	color: #e6edf3;
+}
+
+/* Memo section tag */
+html[data-theme='dark'] [data-memo-tag] {
+	background-color: rgba(44, 90, 255, 0.2) !important;
+}
+
+/* Gray text */
+html[data-theme='dark'] [data-gray-text] {
+	color: #8b949e !important;
+}
+
+/* Separator lines */
+html[data-theme='dark'] [data-separator] {
+	border-color: #21262d !important;
+	background-color: #21262d !important;
+}
+
+/* All answers section */
+html[data-theme='dark'] [data-all-answers] {
+	border-top-color: #21262d !important;
+}
+
+/* Search input */
+html[data-theme='dark'] [data-search-wrap] {
+	background-color: #161b22 !important;
+}
+
+html[data-theme='dark'] [data-search-wrap] input {
+	color: #e6edf3 !important;
+}
+
+html[data-theme='dark'] [data-search-wrap] input::placeholder {
+	color: #484f58 !important;
+}
+
+/* Memo textarea */
+html[data-theme='dark'] textarea {
+	color: #e6edf3 !important;
+}
+
+/* Memo page answer card */
+html[data-theme='dark'] [data-memo-answer-card] {
+	border-color: #2c5aff !important;
+	background-color: #161b22 !important;
+}
+
+html[data-theme='dark'] [data-memo-answer-card] p {
+	color: #e6edf3;
+}
+
+html[data-theme='dark'] [data-existing-memo] {
+	border-bottom-color: #21262d !important;
+}
+
+/* Profile page */
+html[data-theme='dark'] [data-profile-card] {
+	background-color: #161b22 !important;
+}
+
+html[data-theme='dark'] [data-profile-section] {
+	border-bottom-color: #21262d !important;
+}
+
+html[data-theme='dark'] [data-footer-card] {
+	background-color: #161b22 !important;
+}
+
+/* Buttons override */
+html[data-theme='dark'] button {
+	color: #e6edf3;
+}
+
+/* Empty state text */
+html[data-theme='dark'] [data-empty-text] {
+	color: #8b949e !important;
+}
+
+/* Logo invert in dark mode */
+html[data-theme='dark'] header button svg path[fill] {
+	fill: #e6edf3;
+}
+
+html[data-theme='dark'] header button svg path[stroke] {
+	stroke: #e6edf3;
+}
+
+/* Icon colors for dark mode - handled via the header component */
+
+/* Bottom sheet / modal backdrop */
+html[data-theme='dark'] [data-bottom-sheet] {
+	background-color: #161b22 !important;
+}

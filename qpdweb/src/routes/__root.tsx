@@ -87,6 +87,7 @@ function RootComponent() {
     checkAuth();
 
     // 3. 실시간 상태 변경 감지
+    if (!supabase) return;
     const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
       if (session?.user) {
         console.log("⚡ 실시간 로그인 감지");

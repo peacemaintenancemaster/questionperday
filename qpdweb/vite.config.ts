@@ -11,6 +11,7 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
 
 export default defineConfig({
+    root: resolve(__dirname),
     plugins: [
         // svgr을 react()보다 앞에 두는 것이 안전합니다.
         svgr({

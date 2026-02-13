@@ -36,7 +36,7 @@ function RouteComponent() {
     const [selectedAnswer, setSelectedAnswer] = useState<any>(null);
     const [latestAnswer, setLatestAnswer] = useState<any>(null);
 
-    // 1. 데이터 로드: 누적 횟수, 파란 점 날짜, 최신 기록
+    // 1. 데이터 로드 (총 횟수, 파란 점용 날짜, 가장 최신 답변)
     useEffect(() => {
         if (!user) return;
         const fetchData = async () => {
@@ -71,7 +71,7 @@ function RouteComponent() {
         fetchData();
     }, [user]);
 
-    // 2. 날짜 선택 시 해당 날짜 답변 체크
+    // 2. 날짜 선택 시 해당 날짜의 답변 체크
     useEffect(() => {
         if (!user) return;
         const fetchSelected = async () => {
@@ -88,7 +88,7 @@ function RouteComponent() {
         fetchSelected();
     }, [calendar.currentSelectedDate, user]);
 
-    // [중요] 숫자가 겹치지 않게 '장식'만 리턴 (숫자는 Calendar가 직접 그림)
+    // [중요] 숫자가 겹치지 않게 '장식'만 담당 (숫자는 Calendar 컴포넌트가 그림)
     const renderCell = ({ date }: { date: Date }) => {
         const isSelected = isSameDay(date, calendar.currentSelectedDate);
         const formattedDate = format(date, 'yyyy-MM-dd');
@@ -97,9 +97,9 @@ function RouteComponent() {
 
         return (
             <div {...stylex.props(styles.cellWrap)}>
-                {/* 선택 시 원 배경 */}
+                {/* 선택 시 파란 원 배경 */}
                 <div {...stylex.props(isSelected && styles.circle)} />
-                {/* 답변이 있을 때 파란 점 */}
+                {/* 답변 완료 시 하단 파란 점 */}
                 {hasAnswer && !isFuture && <div {...stylex.props(styles.dot)} />}
             </div>
         );
@@ -112,9 +112,9 @@ function RouteComponent() {
 
     return (
         <section {...stylex.props(styles.base)}>
-            {/* 상단 프로모션 배너 */}
+            {/* 상단 통계 배너 */}
             <div {...stylex.props(styles.promotion, flex.column)}>
-                <h3 {...stylex.props(typo['Heading/lines/H3_20∙130_SemiBold_lines'])}>
+                <h3 {...stylex.props(typo['Heading/lines/H3_20∙130_SemiBold_lines'], styles.primaryBlack)}>
                     지금까지 <span {...stylex.props(styles.primaryColor)}>총 {totalCount}번</span> 기록했어요!
                 </h3>
                 <p {...stylex.props(typo['Body/lines/Body3_14∙150_Regular_lines'], styles.promotionSub)}>
@@ -122,14 +122,14 @@ function RouteComponent() {
                 </p>
             </div>
 
-            {/* 메인 캘린더 (월간 뷰 유지) */}
+            {/* 메인 캘린더 (사용자님 원본 커스텀 컴포넌트) */}
             <div {...stylex.props(styles.calendar)}>
                 <Calendar {...calendar} onClickDay={handleDayClick} renderCell={renderCell} />
             </div>
 
-            {/* 선택 날짜 답변 섹션 */}
+            {/* 선택 날짜 상세 영역 */}
             <div {...stylex.props(styles.section)}>
-                <p {...stylex.props(typo['Body/Body1_16∙100_SemiBold'], styles.mb16)}>
+                <p {...stylex.props(typo['Body/Body1_16∙100_SemiBold'], styles.mb16, styles.primaryBlack)}>
                     {format(calendar.currentSelectedDate, 'yyyy.MM.dd')}
                 </p>
                 {selectedAnswer ? (
@@ -148,10 +148,10 @@ function RouteComponent() {
                 )}
             </div>
 
-            {/* 누적 기록 섹션 */}
+            {/* 누적 기록 섹션 (최신 기록 + 전체보기) */}
             <div {...stylex.props(styles.section, flex.column)}>
                 <div {...stylex.props(flex.between, flex.vertical, styles.mb16)}>
-                    <h4 {...stylex.props(typo['Body/Body1_16∙100_SemiBold'])}>나의 기록들</h4>
+                    <h4 {...stylex.props(typo['Body/Body1_16∙100_SemiBold'], styles.primaryBlack)}>나의 기록들</h4>
                     <button {...stylex.props(styles.viewAllBtn)} onClick={() => navigate({ to: '/answer' })}>전체보기</button>
                 </div>
                 {latestAnswer ? (
@@ -175,6 +175,7 @@ const styles = stylex.create({
     base: { padding: '24px 18px', paddingBottom: 60 },
     promotion: { width: '100%', padding: '20px', borderRadius: 16, backgroundColor: colors.gray20, gap: 8, marginBottom: 24 },
     promotionSub: { color: colors.gray80 },
+    primaryBlack: { color: colors.gray90 },
     primaryColor: { color: colors.main },
     calendar: { paddingBottom: 32, borderBottom: `1px solid ${colors.gray40}`, marginBottom: 32 },
     cellWrap: { position: 'relative', width: '100%', height: '100%', display: 'flex', justifyContent: 'center', alignItems: 'center' },
@@ -182,7 +183,7 @@ const styles = stylex.create({
     dot: { position: 'absolute', bottom: -6, width: 4, height: 4, borderRadius: '50%', backgroundColor: colors.main },
     section: { marginBottom: 40 },
     mb16: { marginBottom: 16 },
-    answerCard: { padding: 20, borderRadius: 16, backgroundColor: colors.gray20, cursor: 'pointer', gap: 8 },
+    answerCard: { padding: 20, borderRadius: 16, backgroundColor: colors.gray20, cursor: 'pointer', gap: 8, border: `1px solid ${colors.gray30}` },
     moreLink: { fontSize: 12, color: colors.main, fontWeight: 600, marginTop: 4 },
     submitBtn: { width: '100%', padding: '16px', borderRadius: 14, backgroundColor: colors.main, color: '#fff', border: 'none', fontWeight: 700, cursor: 'pointer' },
     viewAllBtn: { background: 'none', border: 'none', color: colors.gray60, fontSize: 13, cursor: 'pointer', fontWeight: 600 },

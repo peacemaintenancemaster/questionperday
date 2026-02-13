@@ -13,7 +13,6 @@ import { isSameDay, isAfter, startOfDay, format } from 'date-fns';
 import { useEffect, useState } from 'react';
 import { useUser } from '~/domain/user/store';
 import { supabase } from '~/lib/supabase';
-import { Icon } from '~/shared/images';
 
 const searchSchema = z.object({
     dateAt: z.string().optional(),
@@ -34,14 +33,13 @@ function RouteComponent() {
 
     const [answeredDates, setAnsweredDates] = useState<Set<string>>(new Set());
     const [totalCount, setTotalCount] = useState(0);
-    const [selectedAnswer, setSelectedAnswer] = useState<any>(null); // 선택한 날짜의 답변
-    const [latestAnswer, setLatestAnswer] = useState<any>(null);     // 가장 최근 답변
+    const [selectedAnswer, setSelectedAnswer] = useState<any>(null);
+    const [latestAnswer, setLatestAnswer] = useState<any>(null);
 
-    // 1. 초기 데이터 로드 (총 개수, 파란 점용 날짜들, 최신 기록 1건)
+    // 1. 데이터 로드: 누적 횟수, 파란 점 날짜, 최신 기록
     useEffect(() => {
         if (!user) return;
         const fetchData = async () => {
-            // 답변한 날짜 목록 (파란 점)
             const { data: dateData } = await supabase
                 .from('answer')
                 .select('question:questionId ( dateAt )')
@@ -53,7 +51,6 @@ function RouteComponent() {
                 setAnsweredDates(dates as Set<string>);
             }
 
-            // 총 기록 횟수
             const { count } = await supabase
                 .from('answer')
                 .select('*', { count: 'exact', head: true })
@@ -61,7 +58,6 @@ function RouteComponent() {
                 .eq('isDel', 0);
             if (count !== null) setTotalCount(count);
 
-            // 가장 최신 답변 1건 (하단 섹션용)
             const { data: latest } = await supabase
                 .from('answer')
                 .select(`*, question:questionId ( title, dateAt )`)
@@ -69,16 +65,16 @@ function RouteComponent() {
                 .eq('isDel', 0)
                 .order('createdAt', { ascending: false })
                 .limit(1)
-                .single();
+                .maybeSingle();
             setLatestAnswer(latest);
         };
         fetchData();
     }, [user]);
 
-    // 2. 달력 날짜 변경 시, 해당 날짜의 답변이 있는지 체크
+    // 2. 날짜 선택 시 해당 날짜 답변 체크
     useEffect(() => {
         if (!user) return;
-        const fetchSelectedAnswer = async () => {
+        const fetchSelected = async () => {
             const dateStr = format(calendar.currentSelectedDate, 'yyyy-MM-dd');
             const { data } = await supabase
                 .from('answer')
@@ -87,13 +83,12 @@ function RouteComponent() {
                 .eq('isDel', 0)
                 .filter('question.dateAt', 'eq', dateStr)
                 .maybeSingle();
-            
             setSelectedAnswer(data);
         };
-        fetchSelectedAnswer();
+        fetchSelected();
     }, [calendar.currentSelectedDate, user]);
 
-    // 달력 셀 렌더링 (숫자 겹침 방지)
+    // [중요] 숫자가 겹치지 않게 '장식'만 리턴 (숫자는 Calendar가 직접 그림)
     const renderCell = ({ date }: { date: Date }) => {
         const isSelected = isSameDay(date, calendar.currentSelectedDate);
         const formattedDate = format(date, 'yyyy-MM-dd');
@@ -102,7 +97,9 @@ function RouteComponent() {
 
         return (
             <div {...stylex.props(styles.cellWrap)}>
+                {/* 선택 시 원 배경 */}
                 <div {...stylex.props(isSelected && styles.circle)} />
+                {/* 답변이 있을 때 파란 점 */}
                 {hasAnswer && !isFuture && <div {...stylex.props(styles.dot)} />}
             </div>
         );
@@ -115,9 +112,9 @@ function RouteComponent() {
 
     return (
         <section {...stylex.props(styles.base)}>
-            {/* 상단 배너 */}
+            {/* 상단 프로모션 배너 */}
             <div {...stylex.props(styles.promotion, flex.column)}>
-                <h3 {...stylex.props(styles.primaryBlack, typo['Heading/lines/H3_20∙130_SemiBold_lines'])}>
+                <h3 {...stylex.props(typo['Heading/lines/H3_20∙130_SemiBold_lines'])}>
                     지금까지 <span {...stylex.props(styles.primaryColor)}>총 {totalCount}번</span> 기록했어요!
                 </h3>
                 <p {...stylex.props(typo['Body/lines/Body3_14∙150_Regular_lines'], styles.promotionSub)}>
@@ -125,20 +122,19 @@ function RouteComponent() {
                 </p>
             </div>
 
-            {/* 캘린더 */}
+            {/* 메인 캘린더 (월간 뷰 유지) */}
             <div {...stylex.props(styles.calendar)}>
                 <Calendar {...calendar} onClickDay={handleDayClick} renderCell={renderCell} />
             </div>
 
-            {/* [복구] 선택한 날짜의 답변 노출 영역 */}
-            <div {...stylex.props(styles.contentArea)}>
-                <p {...stylex.props(typo['Body/Body1_16∙100_SemiBold'], styles.primaryBlack)}>
+            {/* 선택 날짜 답변 섹션 */}
+            <div {...stylex.props(styles.section)}>
+                <p {...stylex.props(typo['Body/Body1_16∙100_SemiBold'], styles.mb16)}>
                     {format(calendar.currentSelectedDate, 'yyyy.MM.dd')}
                 </p>
-
                 {selectedAnswer ? (
                     <div 
-                        {...stylex.props(styles.answerPreview, flex.column)}
+                        {...stylex.props(styles.answerCard, flex.column)}
                         onClick={() => navigate({ to: '/answer/memo', search: { questionId: selectedAnswer.questionId } })}
                     >
                         <p {...stylex.props(typo['Body/Body2_15∙150_SemiBold_lines'])}>{selectedAnswer.question?.title}</p>
@@ -152,18 +148,12 @@ function RouteComponent() {
                 )}
             </div>
 
-            {/* [복구] 누적 답변 섹션 (가장 최신 답 노출 + 전체보기) */}
-            <div {...stylex.props(styles.latestSection, flex.column)}>
-                <div {...stylex.props(flex.between, flex.vertical)}>
+            {/* 누적 기록 섹션 */}
+            <div {...stylex.props(styles.section, flex.column)}>
+                <div {...stylex.props(flex.between, flex.vertical, styles.mb16)}>
                     <h4 {...stylex.props(typo['Body/Body1_16∙100_SemiBold'])}>나의 기록들</h4>
-                    <button 
-                        {...stylex.props(styles.viewAllBtn)}
-                        onClick={() => navigate({ to: '/answer' })}
-                    >
-                        전체보기
-                    </button>
+                    <button {...stylex.props(styles.viewAllBtn)} onClick={() => navigate({ to: '/answer' })}>전체보기</button>
                 </div>
-
                 {latestAnswer ? (
                     <div 
                         {...stylex.props(styles.latestCard, flex.column)}
@@ -182,25 +172,19 @@ function RouteComponent() {
 }
 
 const styles = stylex.create({
-    base: { padding: '24px 18px', paddingBottom: 100 },
+    base: { padding: '24px 18px', paddingBottom: 60 },
     promotion: { width: '100%', padding: '20px', borderRadius: 16, backgroundColor: colors.gray20, gap: 8, marginBottom: 24 },
     promotionSub: { color: colors.gray80 },
-    primaryBlack: { color: colors.gray90 },
     primaryColor: { color: colors.main },
-    calendar: { paddingBottom: 32, borderBottom: `1px solid ${colors.gray40}`, marginBottom: 24 },
+    calendar: { paddingBottom: 32, borderBottom: `1px solid ${colors.gray40}`, marginBottom: 32 },
     cellWrap: { position: 'relative', width: '100%', height: '100%', display: 'flex', justifyContent: 'center', alignItems: 'center' },
     circle: { position: 'absolute', width: 32, height: 32, borderRadius: '50%', backgroundColor: colors.main, zIndex: -1 },
     dot: { position: 'absolute', bottom: -6, width: 4, height: 4, borderRadius: '50%', backgroundColor: colors.main },
-    contentArea: { marginBottom: 40, gap: 16, display: 'flex', flexDirection: 'column' },
-    answerPreview: { 
-        padding: 20, borderRadius: 16, backgroundColor: colors.gray20, cursor: 'pointer', gap: 8, border: `1px solid ${colors.gray30}` 
-    },
+    section: { marginBottom: 40 },
+    mb16: { marginBottom: 16 },
+    answerCard: { padding: 20, borderRadius: 16, backgroundColor: colors.gray20, cursor: 'pointer', gap: 8 },
     moreLink: { fontSize: 12, color: colors.main, fontWeight: 600, marginTop: 4 },
-    submitBtn: { 
-        width: '100%', padding: '16px', borderRadius: 14, backgroundColor: colors.main, 
-        color: '#fff', border: 'none', fontWeight: 700, cursor: 'pointer' 
-    },
-    latestSection: { gap: 16 },
+    submitBtn: { width: '100%', padding: '16px', borderRadius: 14, backgroundColor: colors.main, color: '#fff', border: 'none', fontWeight: 700, cursor: 'pointer' },
     viewAllBtn: { background: 'none', border: 'none', color: colors.gray60, fontSize: 13, cursor: 'pointer', fontWeight: 600 },
     latestCard: { padding: 20, borderRadius: 16, backgroundColor: '#fff', border: `1px solid ${colors.gray40}`, cursor: 'pointer', gap: 6 },
     latestDate: { fontSize: 12, color: colors.gray60 },

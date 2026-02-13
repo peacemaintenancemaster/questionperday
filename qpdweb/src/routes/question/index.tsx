@@ -13,6 +13,8 @@ function QuestionPage() {
   const navigate = useNavigate();
   const user = useUser();
   const [question, setQuestion] = useState<any>(null);
+  const [isLoading, setIsLoading] = useState(true);
+  const [showNoQuestionModal, setShowNoQuestionModal] = useState(false);
   
   // 입력 상태들
   const [text, setText] = useState('');
@@ -23,14 +25,27 @@ function QuestionPage() {
   // 1. 오늘의 질문 가져오기
   useEffect(() => {
     const fetchTodayQuestion = async () => {
-      const today = new Date().toISOString().split('T')[0];
-      const { data } = await supabase
-        .from('question')
-        .select('*')
-        .eq('dateAt', today)
-        .single();
-      
-      if (data) setQuestion(data);
+      setIsLoading(true);
+      try {
+        // 가장 최근 질문 가져오기
+        const { data, error } = await supabase
+          .from('questions')
+          .select('*')
+          .order('created_at', { ascending: false })
+          .limit(1)
+          .single();
+        
+        if (error || !data) {
+          setShowNoQuestionModal(true);
+        } else {
+          setQuestion(data);
+        }
+      } catch (error) {
+        console.error('질문 조회 에러:', error);
+        setShowNoQuestionModal(true);
+      } finally {
+        setIsLoading(false);
+      }
     };
     fetchTodayQuestion();
   }, []);
@@ -69,17 +84,38 @@ function QuestionPage() {
     }
   };
 
-  if (!question) return <div className="p-5">오늘의 질문을 불러오는 중...</div>;
+  if (isLoading) {
+    return (
+      <div {...stylex.props(styles.loading)}>
+        <p>오늘의 질문을 불러오는 중...</p>
+      </div>
+    );
+  }
+
+  if (showNoQuestionModal || !question) {
+    return (
+      <div {...stylex.props(styles.modalOverlay)}>
+        <div {...stylex.props(styles.modalContent)}>
+          <p {...stylex.props(styles.modalText)}>오늘의 질문이 없습니다</p>
+          <button
+            {...stylex.props(styles.modalButton)}
+            onClick={() => navigate({ to: '/' })}>
+            확인
+          </button>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div {...stylex.props(styles.base, flex.column)}>
       {/* 질문 타이틀 */}
       <div {...stylex.props(styles.header)}>
         <p {...stylex.props(typo['Body/Body2_15∙150_Regular'], styles.dateText)}>
-          {question.dateAt}
+          {question.display_date || question.dateAt}
         </p>
         <h2 {...stylex.props(typo['Heading/H3_20∙130_SemiBold'], styles.title)}>
-          {question.title}
+          {question.content || question.title}
         </h2>
       </div>
 
@@ -153,5 +189,53 @@ const styles = stylex.create({
   submitBtn: {
     width: '100%', padding: 16, borderRadius: 12,
     backgroundColor: colors.main, border: 'none', cursor: 'pointer'
-  }
+  },
+  loading: {
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+    height: '100vh',
+    padding: '24px',
+  },
+  modalOverlay: {
+    position: 'fixed',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    backgroundColor: 'rgba(0, 0, 0, 0.5)',
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+    zIndex: 1000,
+    padding: '20px',
+  },
+  modalContent: {
+    backgroundColor: '#fff',
+    borderRadius: 16,
+    padding: '24px',
+    maxWidth: 300,
+    width: '100%',
+    display: 'flex',
+    flexDirection: 'column',
+    gap: 16,
+    alignItems: 'center',
+  },
+  modalText: {
+    fontSize: 16,
+    fontWeight: 600,
+    color: colors.gray90,
+    textAlign: 'center',
+  },
+  modalButton: {
+    width: '100%',
+    padding: '12px',
+    borderRadius: 8,
+    backgroundColor: colors.main,
+    color: '#fff',
+    border: 'none',
+    cursor: 'pointer',
+    fontSize: 14,
+    fontWeight: 600,
+  },
 });

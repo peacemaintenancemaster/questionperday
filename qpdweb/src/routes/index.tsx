@@ -188,7 +188,7 @@ function RouteComponent() {
 								{effectiveTotalCount ?? 0}
 								{'번'}
 							</span>
-							{' 답변했어요!'}
+							{' 기록했어요!'}
 						</>
 					</h3>
 				</div>
@@ -197,9 +197,7 @@ function RouteComponent() {
 						typo['Body/lines/Body3_14∙150_Regular_lines'],
 						styles.promotionSub,
 					)}>
-					{'30개의 생각을 하루도 빠짐 없이 기록하면,'}
-					{'\n'}
-					{'~를 보내드려요.'}
+					{'오늘 떠오른 생각도 가볍게 기록해 보세요.'}
 				</p>
 			</div>
 

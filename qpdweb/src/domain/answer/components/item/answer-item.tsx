@@ -37,15 +37,6 @@ export const AnswerItem = ({
 					)}>
 					Q.
 				</p>
-
-				{showBookmark && (
-					<div {...stylex.props(styles.bookmarkIcon)}>
-						<Icon.Download
-							size='18'
-							color={bookmarkActive ? '#FFBB00' : '#dbdbdb'}
-						/>
-					</div>
-				)}
 			</div>
 
 			<div {...stylex.props(styles.textWrap, flex.column)}>

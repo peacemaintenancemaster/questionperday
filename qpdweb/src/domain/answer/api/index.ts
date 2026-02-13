@@ -66,8 +66,20 @@ const getAnswerByMonth = async (
 const getAnswerCounts = async (): Promise<{
     answerCounts: number;
 }> => {
-     // 임시: 전체 답변 수 조회 로직 필요
-    return { answerCounts: 0 };
+    const { data: { session } } = await supabase.auth.getSession();
+    if (!session) return { answerCounts: 0 };
+
+    const { count, error } = await supabase
+        .from('answers')
+        .select('*', { count: 'exact', head: true })
+        .eq('user_id', session.user.id);
+
+    if (error) {
+        console.error('답변 수 조회 에러:', error);
+        return { answerCounts: 0 };
+    }
+
+    return { answerCounts: count || 0 };
 };
 
 const getAnswerByDate = async (

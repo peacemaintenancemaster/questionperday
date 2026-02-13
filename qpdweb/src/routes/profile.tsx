@@ -5,9 +5,11 @@ import { useMockStore, useMockActions } from '~/shared/store/mock-data';
 import { AnswerItem } from '~/domain/answer/components/item/answer-item';
 import { AnswerDownloadCard } from '~/domain/answer/components/download/answer-download-card';
 import { useAnswerDownload } from '~/domain/answer/hooks/useAnswerDownload';
-import { useState, useRef } from 'react';
+import { useState, useRef, useEffect } from 'react';
 import { Icon } from '~/shared/images';
 import { useModal } from '~/shared/hooks/useModal';
+import { useUser } from '~/domain/user/store';
+import { supabase } from '~/lib/supabase';
 
 export const Route = createFileRoute('/profile')({
 	component: ProfilePage,
@@ -40,16 +42,42 @@ function ProfilePage() {
 	const inviteModal = useModal('invite-friends');
 	const withdrawModal = useModal('withdraw-confirm');
 
-	// Profile edit state
-	const [nickname, setNickname] = useState('닉네임12');
-	const [editNickname, setEditNickname] = useState('닉네임12');
+	const user = useUser();
+	
+	// Profile edit state - 카카오톡 닉네임을 기본값으로 사용
+	const [nickname, setNickname] = useState(user?.name || '');
+	const [editNickname, setEditNickname] = useState(user?.name || '');
 	const [isEditingNickname, setIsEditingNickname] = useState(false);
 	const nicknameInputRef = useRef<HTMLInputElement>(null);
 
-	const handleProfileSave = () => {
-		setNickname(editNickname);
-		setIsEditingNickname(false);
-		profileModal.close();
+	// 사용자 정보가 변경되면 닉네임 업데이트
+	useEffect(() => {
+		if (user?.name) {
+			setNickname(user.name);
+			setEditNickname(user.name);
+		}
+	}, [user?.name]);
+
+	const handleProfileSave = async () => {
+		try {
+			// Supabase에 닉네임 업데이트
+			const { data: { session } } = await supabase.auth.getSession();
+			if (session?.user) {
+				const { error } = await supabase
+					.from('users')
+					.update({ nickname: editNickname })
+					.eq('id', user?.id);
+
+				if (error) throw error;
+			}
+			
+			setNickname(editNickname);
+			setIsEditingNickname(false);
+			profileModal.close();
+		} catch (error) {
+			console.error('닉네임 저장 에러:', error);
+			alert('닉네임 저장에 실패했습니다.');
+		}
 	};
 
 	const handleProfileOpen = () => {
@@ -81,14 +109,14 @@ function ProfilePage() {
 						</p>
 						<button
 							{...stylex.props(styles.editBtn)}
-							onClick={handleProfileOpen}>
-							<span
-								{...stylex.props(
-									typo['Caption/Caption1_13∙100_SemiBold'],
-									styles.mainColor,
-								)}>
-								프로필 수정
-							</span>
+							onClick={() => {
+								setIsEditingNickname(true);
+								setTimeout(() => nicknameInputRef.current?.focus(), 50);
+							}}>
+							<svg width='16' height='16' viewBox='0 0 24 24' fill='none'>
+								<path d='M11 4H4C3.46957 4 2.96086 4.21071 2.58579 4.58579C2.21071 4.96086 2 5.46957 2 6V20C2 20.5304 2.21071 21.0391 2.58579 21.4142C2.96086 21.7893 3.46957 22 4 22H18C18.5304 22 19.0391 21.7893 19.4142 21.4142C19.7893 21.0391 20 20.5304 20 20V13' stroke='#2C5AFF' strokeWidth='2' strokeLinecap='round' strokeLinejoin='round' />
+								<path d='M18.5 2.50001C18.8978 2.10219 19.4374 1.87869 20 1.87869C20.5626 1.87869 21.1022 2.10219 21.5 2.50001C21.8978 2.89784 22.1213 3.4374 22.1213 4.00001C22.1213 4.56262 21.8978 5.10219 21.5 5.50001L12 15L8 16L9 12L18.5 2.50001Z' stroke='#2C5AFF' strokeWidth='2' strokeLinecap='round' strokeLinejoin='round' />
+							</svg>
 						</button>
 					</div>
 					<div {...stylex.props(flex.vertical, styles.emailRow)}>
@@ -98,7 +126,7 @@ function ProfilePage() {
 								typo['Body/Body3_14∙100_Regular'],
 								styles.gray80,
 							)}>
-							user@naver.com
+							{user?.email || 'user@naver.com'}
 						</p>
 						<Icon.ArrowRight size='12' color='#9a9a9a' />
 					</div>
@@ -118,24 +146,23 @@ function ProfilePage() {
 						)}>
 						친구 초대하기
 					</p>
-					<p
-						data-gray-text
-						{...stylex.props(
-							typo['Caption/lines/Caption1_13∙150_Regular_lines'],
-							styles.gray80,
-							styles.inviteDesc,
-						)}>
-						친구를 초대하면 00를 드려요!
-					</p>
 				</div>
 				<button
 					{...stylex.props(styles.inviteBtn)}
-					onClick={() => inviteModal.open()}>
+					onClick={async () => {
+						try {
+							await navigator.clipboard.writeText('https://questionperday.me/');
+							alert('링크가 복사되었습니다!');
+						} catch (error) {
+							console.error('링크 복사 실패:', error);
+							alert('링크 복사에 실패했습니다.');
+						}
+					}}>
 					<span
 						{...stylex.props(
 							typo['Body/Body3_14∙100_SemiBold'],
 						)}>
-						초대하기
+						링크 복사
 					</span>
 				</button>
 			</div>

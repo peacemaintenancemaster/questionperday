@@ -78,17 +78,18 @@ export const Header = ({ variant, onClickCallback }: Props) => {
 
             {/* 우측 버튼 그룹 */}
             <div {...styleX.props(styles.buttonGroup, flex.vertical)}>
-                {/* [추가됨] 다크모드 토글 버튼 - 태양 아이콘 색상 강제 고정 */}
+                {/* 다크모드 토글 버튼 */}
                 <button
                     {...styleX.props(styles.button)}
                     onClick={toggleTheme}
                     aria-label={isDark ? '라이트 모드로 전환' : '다크 모드로 전환'}
+                    style={{ display: 'flex', alignItems: 'center', justifyContent: 'center' }}
                 >
                     {isDark ? (
                         // 다크모드일 땐 태양 아이콘을 무조건 흰색(#ffffff)으로 띄움
                         <Icon.Sun size='24' color='#ffffff' />
                     ) : (
-                        // 라이트모드일 땐 기존 아이콘 컬러(회색) 사용
+                        // 라이트모드일 땐 초승달 아이콘 표시
                         <Icon.Moon size='24' color={iconColor} />
                     )}
                 </button>

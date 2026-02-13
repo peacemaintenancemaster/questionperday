@@ -62,7 +62,12 @@ export const add = async (data: QuestionBaseSchema) => {
             content: data.title, 
             display_date: finalDate,
             title: data.title || "",
-            subText: "" 
+            subText: data.subText || "",
+            needNickname: data.needNickname ?? true,
+            needPhone: data.needPhone ?? false,
+            logoImageId: data.logoImageId || null,
+            article: data.article || null,
+            timeAt: data.timeAt || null,
         }])
         .select()
         .single();
@@ -80,7 +85,13 @@ export const edit = async (id: number, data: QuestionBaseSchema) => {
         .update({ 
             content: data.title, 
             // [교정] 수정할 때도 날짜 형식을 바꿉니다.
-            display_date: formatToFullDate(data.dateAt) 
+            display_date: formatToFullDate(data.dateAt),
+            subText: data.subText || "",
+            needNickname: data.needNickname ?? true,
+            needPhone: data.needPhone ?? false,
+            logoImageId: data.logoImageId || null,
+            article: data.article || null,
+            timeAt: data.timeAt || null,
         })
         .eq('id', id)
         .select().single();

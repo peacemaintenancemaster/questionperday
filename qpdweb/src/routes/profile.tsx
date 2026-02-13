@@ -8,7 +8,7 @@ import { useAnswerDownload } from '~/domain/answer/hooks/useAnswerDownload';
 import { useState, useRef, useEffect } from 'react';
 import { Icon } from '~/shared/images';
 import { useModal } from '~/shared/hooks/useModal';
-import { useUser } from '~/domain/user/store';
+import { useUser, useUserActions } from '~/domain/user/store';
 import { supabase } from '~/lib/supabase';
 
 export const Route = createFileRoute('/profile')({
@@ -43,6 +43,7 @@ function ProfilePage() {
 	const withdrawModal = useModal('withdraw-confirm');
 
 	const user = useUser();
+	const { setUser } = useUserActions();
 	
 	// Profile edit state - 카카오톡 닉네임을 기본값으로 사용
 	const [nickname, setNickname] = useState(user?.name || '');
@@ -60,18 +61,18 @@ function ProfilePage() {
 
 	const handleProfileSave = async () => {
 		try {
-			// Supabase에 닉네임 업데이트
-			const { data: { session } } = await supabase.auth.getSession();
-			if (session?.user) {
-				const { error } = await supabase
-					.from('users')
-					.update({ nickname: editNickname })
-					.eq('id', user?.id);
+			const { data: { user: authUser }, error } = await supabase.auth.updateUser({
+				data: { name: editNickname },
+			});
 
-				if (error) throw error;
+			if (error) throw error;
+			if (!authUser) throw new Error('User not updated');
+
+			// Update the user state in Zustand store
+			if (user) {
+				setUser({ ...user, name: editNickname });
 			}
 			
-			setNickname(editNickname);
 			setIsEditingNickname(false);
 			profileModal.close();
 		} catch (error) {
@@ -88,6 +89,15 @@ function ProfilePage() {
 
 	const handleWithdraw = () => {
 		withdrawModal.close();
+	};
+
+	const handleLogout = async () => {
+		const { error } = await supabase.auth.signOut();
+		if (error) {
+			console.error('Error logging out:', error);
+			return;
+		}
+		navigate({ to: '/' });
 	};
 
 	return (
@@ -308,8 +318,21 @@ function ProfilePage() {
 				</div>
 			</div>
 
-			{/* Withdrawal */}
-			<div {...stylex.props(styles.withdrawWrap, flex.end)}>
+			{/* Footer Buttons */}
+			<div {...stylex.props(styles.footerButtons)}>
+				<button
+					{...stylex.props(styles.withdrawBtn)}
+					onClick={handleLogout}>
+					<span
+						data-gray-text
+						{...stylex.props(
+							typo['Caption/Caption1_13∙100_Regular'],
+							styles.gray70,
+						)}>
+						로그아웃
+					</span>
+				</button>
+				<div {...stylex.props(styles.footerButtonDivider)} />
 				<button
 					{...stylex.props(styles.withdrawBtn)}
 					onClick={() => withdrawModal.open()}>
@@ -669,9 +692,17 @@ const styles = stylex.create({
 		justifyContent: 'center',
 		cursor: 'pointer',
 	},
-	withdrawWrap: {
+	footerButtons: {
 		width: '100%',
 		display: 'flex',
+		alignItems: 'center',
+		justifyContent: 'flex-end',
+		gap: 8,
+	},
+	footerButtonDivider: {
+		width: 1,
+		height: 12,
+		backgroundColor: colors.gray50,
 	},
 	withdrawBtn: {
 		cursor: 'pointer',

@@ -2,7 +2,6 @@ import * as stylex from '@stylexjs/stylex';
 import { format } from 'date-fns';
 import { ko } from 'date-fns/locale';
 import { ReactNode } from 'react';
-import { useGetAnswerByMonth } from '~/domain/answer/hooks/useGetAnswerByMonth';
 import { useCalendar } from '~/shared/hooks/useCalendar';
 import { Icon } from '~/shared/images';
 import { colors, flex, typo } from '~/shared/style/common.stylex';
@@ -10,6 +9,7 @@ import { colors, flex, typo } from '~/shared/style/common.stylex';
 type Props = ReturnType<typeof useCalendar> & {
 	// eslint-disable-next-line no-unused-vars
 	renderCell: (arg: { date: Date }) => ReactNode;
+	isDayDisabled?: (date: Date) => boolean;
 };
 
 export const Calendar = ({ renderCell, ...props }: Props) => {
@@ -19,12 +19,7 @@ export const Calendar = ({ renderCell, ...props }: Props) => {
 		gridDays,
 		onClickMonth,
 		currentSelectedDate,
-		startOfCurrentMonth,
 	} = props;
-
-	const { data: answerCountData } = useGetAnswerByMonth(
-		format(startOfCurrentMonth, 'yyyy-MM-dd'),
-	);
 
 	const onClickToday = () => {
 		onClickDay(new Date());
@@ -90,6 +85,9 @@ export const Calendar = ({ renderCell, ...props }: Props) => {
 				{gridDays.map((date, index) => {
 					const isLeftSide = index % 7 === 0;
 					const isRightSide = index % 7 === 6;
+					const isDisabled = props.isDayDisabled
+						? props.isDayDisabled(date)
+						: false;
 
 					return (
 						<div
@@ -98,10 +96,9 @@ export const Calendar = ({ renderCell, ...props }: Props) => {
 								styles.dayCell,
 								isLeftSide && styles.leftSide,
 								isRightSide && styles.rightSide,
+								isDisabled && styles.disabled,
 							)}
-							onClick={() => {
-								onClickDay(date);
-							}}>
+							onClick={isDisabled ? undefined : () => onClickDay(date)}>
 							{renderCell({ date })}
 						</div>
 					);
@@ -148,6 +145,9 @@ const styles = stylex.create({
 		alignItems: 'center',
 		cursor: 'pointer',
 		borderRadius: '4px',
+	},
+	disabled: {
+		cursor: 'default',
 	},
 	leftSide: {
 		paddingLeft: '0px',

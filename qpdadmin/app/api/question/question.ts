@@ -14,7 +14,7 @@ const formatToFullDate = (dateStr: string) => {
 
 export const getQuestionMap = async (dateAt: string) => {
     const { data, error } = await supabase
-        .from('questions')
+        .from('question')
         .select('*')
         .like('display_date', `${dateAt}%`);
 
@@ -36,7 +36,7 @@ export const getQuestionMap = async (dateAt: string) => {
 };
 
 export const Del = async (id: number) => {
-    const { error } = await supabase.from('questions').delete().eq('id', id);
+    const { error } = await supabase.from('question').delete().eq('id', id);
     if (error) throw error;
 };
 
@@ -57,7 +57,7 @@ export const add = async (data: QuestionBaseSchema) => {
     console.log("최종 저장 시도 날짜:", finalDate);
 
     const { data: insertedData, error } = await supabase
-        .from('questions')
+        .from('question')
         .insert([{ 
             content: data.title, 
             display_date: finalDate,
@@ -81,7 +81,7 @@ export const add = async (data: QuestionBaseSchema) => {
 
 export const edit = async (id: number, data: QuestionBaseSchema) => {
     const { data: updatedData, error } = await supabase
-        .from('questions')
+        .from('question')
         .update({ 
             content: data.title, 
             // [교정] 수정할 때도 날짜 형식을 바꿉니다.
@@ -101,7 +101,7 @@ export const edit = async (id: number, data: QuestionBaseSchema) => {
 
 export const getList = async (dateAt: string) => {
     const { data, error } = await supabase
-        .from('questions')
+        .from('question')
         .select('*')
         .like('display_date', `${dateAt}%`);
     if (error) throw error;

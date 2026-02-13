@@ -32,7 +32,7 @@ export const initBaseQuestion: QuestionBaseSchema = {
 export const addQuestion = async (params: QuestionAddSchema) => {
 	// 테이블명을 'questions'로 수정하고 필드명도 맞춤
 	const { data, error } = await supabase
-		.from('questions')
+		.from('question')
 		.insert({
 			content: params.title,
 			display_date: params.dateAt,

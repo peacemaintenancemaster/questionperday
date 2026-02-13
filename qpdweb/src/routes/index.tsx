@@ -9,7 +9,7 @@ import { zodValidator } from '@tanstack/zod-adapter';
 import { z } from 'zod';
 import { useCalendar } from '~/shared/hooks/useCalendar';
 import { Calendar } from '~/domain/home/calendar/calendar';
-import { isSameDay, isToday } from 'date-fns';
+import { isSameDay, isToday, isFuture, isPast } from 'date-fns';
 import { format } from 'date-fns';
 import { useGetAnswerByMonth } from '~/domain/answer/hooks/useGetAnswerByMonth';
 import useModal from '~/shared/hooks/useModal';
@@ -135,20 +135,20 @@ function RouteComponent() {
 
 		const hasAnswer = Boolean(effectiveAnswerCountMap?.[formattedDate]);
 
+		const isClickable = hasAnswer || isToday(date);
+
 		return (
 			<div {...stylex.props(styles.cellWrap)}>
 				<div {...stylex.props(isSelected && styles.circle)} />
 
 				<div
 					data-cell=""
-					{...(!isCurrentMonth || (!isSelected && !hasAnswer)) ? { 'data-cell-gray': '' } : {}}
-					{...(isSelected ? { 'data-cell-white': '' } : {})}
 					{...stylex.props(
 						styles.cell,
-						!isCurrentMonth && styles.gray,
-						!isSelected && !hasAnswer && styles.gray,
-						isSelected && styles.white,
 						typo['Caption/Caption2_12∙100_SemiBold'],
+						!isCurrentMonth && styles.gray,
+						!isClickable && styles.gray,
+						isSelected && styles.white,
 					)}>
 					{date.getDate()}
 				</div>
@@ -158,9 +158,10 @@ function RouteComponent() {
 		);
 	};
 
-	// Override calendar click to allow clicking on mock dates
-	const handleDayClick = (date: Date) => {
-		calendar.onClickDay(date);
+	const isDayDisabled = (date: Date) => {
+		const formattedDate = format(date, 'yyyy-MM-dd');
+		const hasAnswer = Boolean(effectiveAnswerCountMap?.[formattedDate]);
+		return !(hasAnswer || isToday(date));
 	};
 
 	return (
@@ -205,8 +206,8 @@ function RouteComponent() {
 			<div data-calendar-wrap {...stylex.props(styles.calendar)}>
 				<Calendar
 					{...calendar}
-					onClickDay={handleDayClick}
 					renderCell={renderCell}
+					isDayDisabled={isDayDisabled}
 				/>
 			</div>
 

@@ -34,6 +34,7 @@ function RouteComponent() {
     const [answeredDates, setAnsweredDates] = useState<Set<string>>(new Set());
     const [totalCount, setTotalCount] = useState(0);
 
+    // [기능] 실제 데이터 가져오기 (총 기록 횟수 & 답변한 날짜들)
     useEffect(() => {
         if (!user) return;
         const fetchData = async () => {
@@ -59,49 +60,34 @@ function RouteComponent() {
         fetchData();
     }, [user]);
 
+    // [수정] 렌더링 로직 - 숫자가 겹치지 않게 '장식'만 리턴합니다.
     const renderCell = ({ date }: { date: Date }) => {
-        const isCurrentMonth = date.getMonth() === calendar.startOfCurrentMonth.getMonth();
         const isSelected = isSameDay(date, calendar.currentSelectedDate);
         const formattedDate = format(date, 'yyyy-MM-dd');
-        
         const hasAnswer = answeredDates.has(formattedDate);
         const isFuture = isAfter(startOfDay(date), startOfDay(new Date()));
 
-        // 가독성과 문법 오류 방지를 위해 속성 객체를 미리 정의합니다.
-        const cellProps = {
-            'data-cell': '',
-            ...( (!isCurrentMonth || isFuture) ? { 'data-cell-gray': '' } : {}),
-            ...( isSelected ? { 'data-cell-white': '' } : {})
-        };
-
         return (
             <div {...stylex.props(styles.cellWrap)}>
+                {/* 선택 시 나타나는 파란색 원 배경 */}
                 <div {...stylex.props(isSelected && styles.circle)} />
-
-                <div
-                    {...cellProps}
-                    {...stylex.props(
-                        styles.cell,
-                        (!isCurrentMonth || isFuture) && styles.gray,
-                        isSelected && styles.white,
-                        typo['Caption/Caption2_12∙100_SemiBold'],
-                    )}
-                >
-                    {date.getDate()}
-                </div>
-
+                
+                {/* [중요] 숫자는 Calendar 컴포넌트가 직접 그리므로 여기선 그리지 않습니다.
+                    대신 파란 점만 조건부로 띄웁니다. */}
                 {hasAnswer && !isFuture && <div {...stylex.props(styles.dot)} />}
             </div>
         );
     };
 
     const handleDayClick = (date: Date) => {
+        // [기능] 미래의 날짜는 클릭해도 아무 일 없게 막음
         if (isAfter(startOfDay(date), startOfDay(new Date()))) return;
         calendar.onClickDay(date);
     };
 
     return (
         <section {...stylex.props(styles.base)}>
+            {/* [수정] 문구 연동 섹션 */}
             <div data-promotion {...stylex.props(styles.promotion, flex.column)}>
                 <div {...stylex.props(styles.promotionTitle, flex.vertical)}>
                     <h3 {...stylex.props(styles.primaryBlack, typo['Heading/lines/H3_20∙130_SemiBold_lines'])}>
@@ -113,6 +99,7 @@ function RouteComponent() {
                 </p>
             </div>
 
+            {/* 사용자님의 원래 커스텀 캘린더 */}
             <div data-calendar-wrap {...stylex.props(styles.calendar)}>
                 <Calendar
                     {...calendar}
@@ -121,21 +108,13 @@ function RouteComponent() {
                 />
             </div>
 
+            {/* 하단 날짜 표시 및 버튼 */}
             <div {...stylex.props(styles.answerWrap, flex.center, flex.column)}>
                 <p {...stylex.props(typo['Body/Body1_16∙100_SemiBold'], styles.primaryBlack)}>
                     {format(calendar.currentSelectedDate, 'yyyy.MM.dd')}
                 </p>
                 <button
-                    style={{
-                        marginTop: '16px',
-                        padding: '12px 24px',
-                        backgroundColor: colors.main,
-                        color: 'white',
-                        borderRadius: '12px',
-                        border: 'none',
-                        fontWeight: 'bold',
-                        cursor: 'pointer'
-                    }}
+                    {...stylex.props(styles.submitBtn)}
                     onClick={() => navigate({ to: '/question' })}
                 >
                     오늘의 질문 답하기
@@ -153,11 +132,13 @@ const styles = stylex.create({
     primaryBlack: { color: colors.gray90 },
     primaryColor: { color: colors.main },
     calendar: { paddingTop: 28, paddingBottom: 32, borderBottom: `1px solid ${colors.gray40}`, marginBottom: 24 },
-    cellWrap: { position: 'relative', justifyContent: 'center', alignItems: 'center', display: 'flex', flexDirection: 'column', gap: 4 },
-    circle: { position: 'absolute', top: 4, borderRadius: '50%', width: 22, height: 22, zIndex: 0, backgroundColor: colors.main },
-    cell: { position: 'relative', zIndex: 1, borderRadius: '50%', color: colors.gray90, padding: 10 },
-    dot: { width: 4, borderRadius: '50%', height: 4, backgroundColor: colors.main, marginTop: -2 },
-    gray: { color: colors.gray80 },
-    white: { color: colors.white },
-    answerWrap: { gap: 16 },
+    cellWrap: { position: 'relative', height: '100%', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center' },
+    circle: { position: 'absolute', width: 32, height: 32, borderRadius: '50%', backgroundColor: colors.main, zIndex: -1 },
+    dot: { position: 'absolute', bottom: -6, width: 4, height: 4, borderRadius: '50%', backgroundColor: colors.main },
+    answerWrap: { marginTop: 20 },
+    submitBtn: { 
+        marginTop: '16px', padding: '14px 32px', borderRadius: '100px', 
+        backgroundColor: colors.main, color: '#fff', border: 'none', 
+        fontWeight: 700, cursor: 'pointer' 
+    },
 });

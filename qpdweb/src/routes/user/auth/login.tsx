@@ -5,7 +5,7 @@ import { supabase } from '~/lib/supabase'; // 아까 만든 설정 파일
 import { useUserActions } from '~/domain/user/store';
 import { useNavigationRestore } from '~/shared/hooks/useNavigationRestore';
 
-export const Route = createFileRoute('/user/kakao/bridge/login')({
+export const Route = createFileRoute('/user/auth/login')({
   component: RouteComponent,
   validateSearch: z.object({
     code: z.string().optional(),

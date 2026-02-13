@@ -125,6 +125,21 @@ function RouteComponent() {
 		LoginPortal.open();
 	};
 
+	const isDayDisabled = (date: Date) => {
+		const formattedDate = format(date, 'yyyy-MM-dd');
+		const hasAnswer = Boolean(effectiveAnswerCountMap?.[formattedDate]);
+
+		if (isFuture(date)) {
+			return true;
+		}
+
+		if (isPast(date) && !hasAnswer) {
+			return true;
+		}
+
+		return false;
+	};
+
 	const renderCell = ({ date }: { date: Date }) => {
 		const isCurrentMonth =
 			date.getMonth() === calendar.startOfCurrentMonth.getMonth();
@@ -135,19 +150,19 @@ function RouteComponent() {
 
 		const hasAnswer = Boolean(effectiveAnswerCountMap?.[formattedDate]);
 
-		const isClickable = hasAnswer || isToday(date);
+		const isDisabled = isDayDisabled(date);
 
 		return (
 			<div {...stylex.props(styles.cellWrap)}>
 				<div {...stylex.props(isSelected && styles.circle)} />
 
 				<div
-					data-cell=""
+					data-cell=''
 					{...stylex.props(
 						styles.cell,
 						typo['Caption/Caption2_12∙100_SemiBold'],
 						!isCurrentMonth && styles.gray,
-						!isClickable && styles.gray,
+						isDisabled && styles.gray,
 						isSelected && styles.white,
 					)}>
 					{date.getDate()}
@@ -156,12 +171,6 @@ function RouteComponent() {
 				{hasAnswer && <div {...stylex.props(styles.dot)} />}
 			</div>
 		);
-	};
-
-	const isDayDisabled = (date: Date) => {
-		const formattedDate = format(date, 'yyyy-MM-dd');
-		const hasAnswer = Boolean(effectiveAnswerCountMap?.[formattedDate]);
-		return !(hasAnswer || isToday(date));
 	};
 
 	return (

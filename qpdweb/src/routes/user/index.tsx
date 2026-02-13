@@ -30,7 +30,7 @@ const searchSchema = z.object({
 
 type SearchSchema = z.infer<typeof searchSchema>;
 
-export const Route = createFileRoute('/')({
+export const Route = createFileRoute('/user/')({
 	component: RouteComponent,
 	validateSearch: zodValidator(searchSchema),
 });
@@ -41,11 +41,11 @@ function RouteComponent() {
 	const calendar = useCalendar<SearchSchema>(search);
 	const { data: answerCountData } = useGetAnswerByMonth(
 		format(calendar.startOfCurrentMonth, 'yyyy-MM-dd'),
-	);
+	)
 	const { data: answerTotalCount } = useGetAnswerCounts();
 	const { data: answerDataByDate } = useGetAnswerByDate(
 		format(calendar.currentSelectedDate, 'yyyy-MM-dd'),
-	);
+	)
 	const LoginPortal = useModal('login');
 	const [shouldRender, setShouldRender] = useState(false);
 	const navigate = useNavigate();
@@ -60,7 +60,7 @@ function RouteComponent() {
 		setDownloadQuestion(question);
 		setDownloadAnswerText(answerText);
 		downloadAnswer();
-	};
+	}
 
 	// Mock data for testing
 	const mockActions = useMockActions();
@@ -70,7 +70,7 @@ function RouteComponent() {
 	const selectedDateStr = format(
 		calendar.currentSelectedDate,
 		'yyyy-MM-dd',
-	);
+	)
 	const mockQuestionByDate = useMock
 		? mockActions.getQuestionByDate(selectedDateStr)
 		: undefined;
@@ -81,10 +81,10 @@ function RouteComponent() {
 	const currentMonthStr = format(
 		calendar.startOfCurrentMonth,
 		'yyyy-MM',
-	);
+	)
 	const mockAnswerCountMap = useMock
 		? mockActions.getAnswerCountByMonth(currentMonthStr)
-		: {};
+		: {}
 
 	const mockAllQuestions = useMock ? mockActions.getAllQuestions() : [];
 	const mockLatestAnswer = mockAllQuestions[0];
@@ -109,21 +109,21 @@ function RouteComponent() {
 	useEffect(() => {
 		const timer = requestAnimationFrame(() => {
 			setShouldRender(true);
-		});
+		})
 		return () => cancelAnimationFrame(timer);
 	}, [isLogin]);
 
 	useEffect(() => {
 		if (isLogin) {
 			LoginPortal.close();
-			return;
+			return
 		}
 		// Don't show login for testing
 	}, [isLogin, shouldRender]);
 
 	const onClickOpenLoginBottomSheet = () => {
 		LoginPortal.open();
-	};
+	}
 
 	const renderCell = ({ date }: { date: Date }) => {
 		const isCurrentMonth =
@@ -140,7 +140,7 @@ function RouteComponent() {
 				<div {...stylex.props(isSelected && styles.circle)} />
 
 				<div
-					data-cell=""
+					data-cell=''
 					{...(!isCurrentMonth || (!isSelected && !hasAnswer)) ? { 'data-cell-gray': '' } : {}}
 					{...(isSelected ? { 'data-cell-white': '' } : {})}
 					{...stylex.props(
@@ -155,13 +155,13 @@ function RouteComponent() {
 
 				{hasAnswer && <div {...stylex.props(styles.dot)} />}
 			</div>
-		);
-	};
+		)
+	}
 
 	// Override calendar click to allow clicking on mock dates
 	const handleDayClick = (date: Date) => {
 		calendar.onClickDay(date);
-	};
+	}
 
 	return (
 		<section {...stylex.props(styles.base)}>
@@ -237,7 +237,7 @@ function RouteComponent() {
 									navigate({
 										to: '/answer/memo',
 										search: { questionId: q.id },
-									});
+									})
 								}
 							}}>
 							<span
@@ -263,7 +263,7 @@ function RouteComponent() {
 								navigate({
 									to: '/answer/memo',
 									search: { questionId: q.id },
-								});
+								})
 							}
 						}}
 						onDownload={() => {
@@ -272,7 +272,7 @@ function RouteComponent() {
 								handleDownload(
 									q.title,
 									q.answerList[0]?.text ?? '',
-								);
+								)
 							}
 						}}
 					/>
@@ -334,23 +334,23 @@ function RouteComponent() {
 						onClick={() => {
 							const q = isLogin
 								? effectiveQuestionByDate
-								: mockLatestAnswer;
+								: mockLatestAnswer
 							if (q) {
 								navigate({
 									to: '/answer/memo',
 									search: { questionId: q.id },
-								});
+								})
 							}
 						}}
 						onDownload={() => {
 							const q = isLogin
 								? effectiveQuestionByDate
-								: mockLatestAnswer;
+								: mockLatestAnswer
 							if (q) {
 								handleDownload(
 									q.title,
 									q.answerList[0]?.text ?? '',
-								);
+								)
 							}
 						}}
 					/>
@@ -379,7 +379,7 @@ function RouteComponent() {
 				/>
 			</div>
 		</section>
-	);
+	)
 }
 
 const styles = stylex.create({

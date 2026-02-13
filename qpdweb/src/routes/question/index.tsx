@@ -1,228 +1,157 @@
-import { createFileRoute, Link, useNavigate } from '@tanstack/react-router';
+import { createFileRoute, useNavigate } from '@tanstack/react-router';
 import * as stylex from '@stylexjs/stylex';
-import { TodayQuestion } from '~/domain/question/components/today';
-import { QuestionBlurLayout } from '~/shared/components/layout/question/question-blur-layout';
 import { colors, flex, typo } from '~/shared/style/common.stylex';
-import { useQuestionTimer } from '~/domain/question/hooks/useQuestionTimer';
-import { Button } from '~/shared/components/ui/button/button';
-import { useTodayQuestion } from '~/domain/question/hooks/useTodayQuestion';
-import useModal from '~/shared/hooks/useModal';
-import { ArticleModal } from '~/domain/question/components/modal/article-modal';
-import { useEffect } from 'react';
-import { useGlobalModalActions } from '~/shared/store/global-modal';
-import { Timer } from '~/domain/question/components/timer/timer';
-import { useTodayQuestionInfo } from '~/domain/question/hooks/useTodayQuestionInfo';
+import { useState, useEffect } from 'react';
+import { supabase } from '~/lib/supabase';
+import { useUser } from '~/domain/user/store';
 
 export const Route = createFileRoute('/question/')({
-	component: RouteComponent,
+  component: QuestionPage,
 });
 
-function RouteComponent() {
-	const {
-		data: todayQuestionInfo,
-		error: todayQuestionInfoError,
-		isError: isTodayQuestionInfoError,
-	} = useTodayQuestionInfo();
+function QuestionPage() {
+  const navigate = useNavigate();
+  const user = useUser();
+  const [question, setQuestion] = useState<any>(null);
+  
+  // 입력 상태들
+  const [text, setText] = useState('');
+  const [nickname, setNickname] = useState('');
+  const [phone, setPhone] = useState('');
+  const [loading, setLoading] = useState(false);
 
-	const { formattedTime } = useQuestionTimer(todayQuestionInfo?.timeAt ?? '');
+  // 1. 오늘의 질문 가져오기
+  useEffect(() => {
+    const fetchTodayQuestion = async () => {
+      const today = new Date().toISOString().split('T')[0];
+      const { data } = await supabase
+        .from('question')
+        .select('*')
+        .eq('dateAt', today)
+        .single();
+      
+      if (data) setQuestion(data);
+    };
+    fetchTodayQuestion();
+  }, []);
 
-	console.log(todayQuestionInfo, 'todayQuestionInfo');
+  // 2. 답변하기 (닉네임/연락처 로직 적용)
+  const handleSubmit = async () => {
+    if (!text.trim()) {
+      alert('답변 내용을 입력해주세요.');
+      return;
+    }
+    if (loading) return;
+    setLoading(true);
 
-	const {
-		data: questionData,
-		error: todayQuestionError,
-		isError: isTodayQuestionError,
-	} = useTodayQuestion(todayQuestionInfo?.questionId);
-	const modalActions = useGlobalModalActions();
+    try {
+      const { error } = await supabase.from('answer').insert({
+        questionId: question?.id,
+        userId: user?.id,
+        text: text,
+        
+        // [핵심] 값이 없으면 빈 문자열로 저장 (에러 안 나게)
+        nickname: nickname.trim() || '',
+        phone: phone.trim() || '',
+        
+        isDel: 0,
+      });
 
-	const ArticlePortal = useModal('article-portal');
-	const navigate = useNavigate();
+      if (error) throw error;
 
-	const { seconds, hours, minutes } = formattedTime;
+      alert('오늘의 답변이 기록되었습니다.');
+      navigate({ to: '/' }); // 홈으로 이동
+    } catch (e) {
+      console.error(e);
+      alert('저장에 실패했습니다.');
+    } finally {
+      setLoading(false);
+    }
+  };
 
-	const onClickOpenArticleModal = () => {
-		if (!questionData?.question.article) {
-			return;
-		}
-		ArticlePortal.open();
-	};
+  if (!question) return <div className="p-5">오늘의 질문을 불러오는 중...</div>;
 
-	useEffect(() => {
-		const updateWidth = () => {
-			const width = Math.min(window.innerWidth, 600);
-			document.documentElement.style.setProperty('--modal-width', `${width}px`);
-		};
+  return (
+    <div {...stylex.props(styles.base, flex.column)}>
+      {/* 질문 타이틀 */}
+      <div {...stylex.props(styles.header)}>
+        <p {...stylex.props(typo['Body/Body2_15∙150_Regular'], styles.dateText)}>
+          {question.dateAt}
+        </p>
+        <h2 {...stylex.props(typo['Heading/H3_20∙130_SemiBold'], styles.title)}>
+          {question.title}
+        </h2>
+      </div>
 
-		updateWidth();
-		window.addEventListener('resize', updateWidth);
-		return () => window.removeEventListener('resize', updateWidth);
-	}, []);
+      {/* 답변 입력 */}
+      <textarea
+        {...stylex.props(styles.textArea, typo['Body/Body1_16∙150_Regular'])}
+        placeholder="오늘의 생각을 기록해보세요."
+        value={text}
+        onChange={(e) => setText(e.target.value)}
+      />
 
-	useEffect(() => {
-		return () => ArticlePortal.clear();
-	}, []);
+      {/* [수정됨] 추가 정보 입력 (옵션에 따라 표시) */}
+      <div {...stylex.props(styles.inputGroup, flex.column)}>
+        
+        {/* 닉네임: 설정 켜져있으면 보임, 입력 안 해도 됨 */}
+        {question.needNickname ? (
+          <div {...stylex.props(styles.inputRow)}>
+            <span {...stylex.props(styles.label)}>닉네임</span>
+            <input
+              type="text"
+              {...stylex.props(styles.input)}
+              placeholder="닉네임 (선택)"
+              value={nickname}
+              onChange={(e) => setNickname(e.target.value)}
+            />
+          </div>
+        ) : null}
 
-	useEffect(() => {
-		if (todayQuestionInfo?.isAnswered) {
-			modalActions.alert('이미 답변을 보낸 질문이에요.', () =>
-				navigate({ to: '/' }),
-			);
-		}
-	}, [todayQuestionInfo?.isAnswered]);
+        {/* 연락처: 설정 켜져있으면 보임, 숫자만 입력됨 */}
+        {question.needPhone ? (
+          <div {...stylex.props(styles.inputRow)}>
+            <span {...stylex.props(styles.label)}>연락처</span>
+            <input
+              type="text"
+              inputMode="numeric"
+              {...stylex.props(styles.input)}
+              placeholder="숫자만 입력 (선택)"
+              value={phone}
+              onChange={(e) => {
+                const onlyNum = e.target.value.replace(/[^0-9]/g, '');
+                setPhone(onlyNum);
+              }}
+            />
+          </div>
+        ) : null}
+      </div>
 
-	useEffect(() => {
-		if (isTodayQuestionInfoError) {
-			modalActions.alert(todayQuestionInfoError.message, () =>
-				navigate({ to: '/' }),
-			);
-		}
-	}, [isTodayQuestionInfoError, todayQuestionInfoError?.message, modalActions]);
-
-	useEffect(() => {
-		if (isTodayQuestionError) {
-			modalActions.alert(todayQuestionError.message, () =>
-				navigate({ to: '/' }),
-			);
-		}
-	}, [isTodayQuestionError, todayQuestionError?.message, modalActions]);
-
-	return (
-		<QuestionBlurLayout>
-			{/* <Banner /> */}
-			<section {...stylex.props(styles.content)}>
-				<div {...stylex.props(styles.shadow)} />
-
-				<TodayQuestion
-					title={questionData?.question?.title ?? ''}
-					subText={questionData?.question?.subText ?? ''}
-				/>
-
-				<div
-					className='quill'
-					style={{
-						height: '126px',
-						overflow: 'hidden',
-						position: 'relative',
-						zIndex: 1,
-					}}>
-					<div
-						className='ql-container ql-snow'
-						style={{
-							border: 0,
-							position: 'relative',
-							zIndex: -1,
-							opacity: 0.6,
-						}}>
-						<div
-							{...stylex.props(styles.articlePreview)}
-							dangerouslySetInnerHTML={{
-								__html: questionData?.question.article as string,
-							}}
-						/>
-					</div>
-				</div>
-
-				<div {...stylex.props(styles.bottom, flex.column)}>
-					<div
-						{...stylex.props(
-							styles.articlePreviewWrap,
-							flex.center,
-							flex.vertical,
-						)}>
-						<p
-							{...stylex.props(
-								styles.articlePreviewText,
-								typo['Caption/Caption1_13∙100_SemiBold'],
-							)}
-							onClick={onClickOpenArticleModal}>
-							👀 아티클 확인하기 &gt;
-						</p>
-					</div>
-					<div {...stylex.props(styles.banner, flex.column)}>
-						<Timer hours={hours} minutes={minutes} seconds={seconds} />
-
-						<p
-							{...stylex.props(
-								styles.guide,
-								typo['Caption/Caption1_13∙100_Regular'],
-							)}>
-							<span {...stylex.props(styles.blueSpan)}>24시간</span> 동안만 답을
-							보낼 수 있어요!
-						</p>
-					</div>
-
-					<Link to='/question/write' search={{ step: 1 }} style={{ zIndex: 1 }}>
-						<Button variants='primary'>답변 작성하기</Button>
-					</Link>
-				</div>
-
-				<ArticlePortal.Render unmountClearAll animationType='fade'>
-					<ArticleModal
-						onClickClose={ArticlePortal.close}
-						article={questionData?.question.article as string}
-					/>
-				</ArticlePortal.Render>
-			</section>
-		</QuestionBlurLayout>
-	);
+      <button {...stylex.props(styles.submitBtn)} onClick={handleSubmit}>
+        <span style={{ color: '#fff' }}>기록하기</span>
+      </button>
+    </div>
+  );
 }
 
 const styles = stylex.create({
-	shadow: {
-		marginBottom: 4,
-	},
-	bannerImage: {},
-	content: {
-		display: 'flex',
-		flexDirection: 'column',
-		justifyContent: 'space-between',
-		height: 'calc(100% - 44px)',
-		flex: 1,
-	},
-	banner: {
-		width: '100%',
-		height: 70,
-		borderRadius: 14,
-		border: `1px solid ${colors.main}`,
-		backgroundColor: colors.gray20,
-		display: 'flex',
-		zIndex: 1,
-		padding: 12,
-		gap: 12,
-	},
-	timer: {
-		gap: 8,
-	},
-	time: {
-		color: colors.main,
-	},
-	blueSpan: {
-		color: colors.main,
-	},
-	guide: {
-		color: colors.gray80,
-	},
-	bottom: {
-		gap: 24,
-	},
-	topBannerImage: {
-		borderRadius: 14,
-		width: '100%',
-		height: 114,
-	},
-	articlePreview: {
-		height: 126,
-		zIndex: 99,
-	},
-	articlePreviewWrap: {
-		position: 'relative',
-		width: '100%',
-		zIndex: 99,
-	},
-	articlePreviewText: {
-		position: 'absolute',
-		top: '10%',
-		color: colors.main,
-		cursor: 'pointer',
-	},
+  base: { padding: '24px 20px', height: '100vh', backgroundColor: '#fff', gap: 24 },
+  header: { gap: 8 },
+  dateText: { color: colors.gray60 },
+  title: { color: colors.gray90 },
+  textArea: {
+    width: '100%', flex: 1, padding: 16, borderRadius: 12,
+    backgroundColor: colors.gray20, border: 'none', resize: 'none', outline: 'none'
+  },
+  inputGroup: { gap: 16 },
+  inputRow: { gap: 8, display: 'flex', flexDirection: 'column' },
+  label: { fontSize: 13, color: colors.gray70, fontWeight: 600 },
+  input: {
+    padding: '12px', borderRadius: 8, border: `1px solid ${colors.gray30}`,
+    outline: 'none', fontSize: 14
+  },
+  submitBtn: {
+    width: '100%', padding: 16, borderRadius: 12,
+    backgroundColor: colors.main, border: 'none', cursor: 'pointer'
+  }
 });

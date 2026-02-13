@@ -1,191 +1,164 @@
-import { createFileRoute, useSearch } from '@tanstack/react-router';
+import { createFileRoute, useNavigate } from '@tanstack/react-router';
 import * as stylex from '@stylexjs/stylex';
 import { colors, flex, typo } from '~/shared/style/common.stylex';
-import { zodValidator } from '@tanstack/zod-adapter';
+import { useState, useEffect } from 'react';
+import { supabase } from '~/lib/supabase';
+import { useUser } from '~/domain/user/store';
 import { z } from 'zod';
-import { useState } from 'react';
-import { Button } from '~/shared/components/ui/button/button';
-import { format } from 'date-fns';
-import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { getToday } from '~/domain/question/api/question';
-import { 
-    getMemos, 
-    addMemoToSupabase, 
-    updateMemoInSupabase, 
-    deleteMemoInSupabase 
-} from '~/domain/answer/api/memo';
-
-interface MemoQuestion {
-    id: number;
-    title: string;
-    dateAt: string;
-    answerList?: { id: string; text: string }[];
-}
 
 const searchSchema = z.object({
-    questionId: z.number(),
+  questionId: z.number(),
 });
 
 export const Route = createFileRoute('/answer/memo')({
-    component: MemoPage,
-    validateSearch: zodValidator(searchSchema),
+  component: MemoPage,
+  validateSearch: searchSchema,
 });
 
 function MemoPage() {
-    const { questionId } = useSearch({ from: '/answer/memo' });
-    const queryClient = useQueryClient();
-    
-    const [newMemoText, setNewMemoText] = useState('');
-    const [editingMemoId, setEditingMemoId] = useState<string | null>(null);
-    const [editText, setEditText] = useState('');
-    const maxLength = 300;
+  const { questionId } = Route.useSearch();
+  const user = useUser();
+  const [question, setQuestion] = useState<any>(null);
+  const [myAnswer, setMyAnswer] = useState<any>(null);
+  const [memos, setMemos] = useState<any[]>([]); // 기존 메모들
+  const [newMemo, setNewMemo] = useState('');    // 새로 입력할 메모
+  const [loading, setLoading] = useState(false);
 
-    const { data: questionData, isLoading: isQuestionLoading } = useQuery({
-        queryKey: ['question', questionId],
-        queryFn: () => getToday(questionId),
-    });
+  // 데이터 불러오기 (질문 + 내 답변 + 내 메모들)
+  useEffect(() => {
+    if (!user) return;
 
-    const question = questionData?.question as unknown as MemoQuestion;
-    const answerId = question?.answerList?.[0]?.id;
+    const fetchData = async () => {
+      // 1. 질문 정보
+      const { data: qData } = await supabase.from('question').select('*').eq('id', questionId).single();
+      setQuestion(qData);
 
-    const { data: memos = [], isLoading: isMemosLoading } = useQuery({
-        queryKey: ['memos', answerId],
-        queryFn: () => getMemos(String(answerId)),
-        enabled: !!answerId,
-    });
+      // 2. 내 답변 (Main Answer)
+      const { data: aData } = await supabase
+        .from('answer')
+        .select('*')
+        .eq('questionId', questionId)
+        .eq('userId', user.id)
+        .eq('isDel', 0)
+        .single(); // 답변은 하나여야 함
+      setMyAnswer(aData);
 
-    const addMutation = useMutation({
-        mutationFn: (text: string) => addMemoToSupabase(String(answerId), text),
-        onSuccess: () => {
-            queryClient.invalidateQueries({ queryKey: ['memos', answerId] });
-            setNewMemoText('');
-        }
-    });
-
-    const updateMutation = useMutation({
-        mutationFn: ({ id, text }: { id: string; text: string }) => updateMemoInSupabase(id, text),
-        onSuccess: () => {
-            queryClient.invalidateQueries({ queryKey: ['memos', answerId] });
-            setEditingMemoId(null);
-        }
-    });
-
-    const deleteMutation = useMutation({
-        mutationFn: (id: string) => deleteMemoInSupabase(id),
-        onSuccess: () => {
-            queryClient.invalidateQueries({ queryKey: ['memos', answerId] });
-        }
-    });
-
-    const handleAddMemo = () => {
-        if (!newMemoText.trim() || addMutation.isPending) return;
-        addMutation.mutate(newMemoText.trim());
+      // 3. 내 메모들 (Sub Thoughts)
+      const { data: mData } = await supabase
+        .from('memo')
+        .select('*')
+        .eq('questionId', questionId) // 혹은 answerId를 참조할 수도 있음 (DB 구조에 따라)
+        .eq('userId', user.id)
+        .eq('isDel', 0)
+        .order('createdAt', { ascending: true });
+      setMemos(mData || []);
     };
+    fetchData();
+  }, [questionId, user]);
 
-    if (isQuestionLoading || isMemosLoading) return null;
+  // 메모 추가하기 (검증 완료: memo 테이블 사용)
+  const handleAddMemo = async () => {
+    if (!newMemo.trim()) return;
+    setLoading(true);
 
-    return (
-        <section {...stylex.props(styles.base, flex.column)}>
-            <div {...stylex.props(styles.answerCard, flex.column)}>
-                <p {...stylex.props(typo['Body/Body1_16∙100_SemiBold'], styles.mainColor)}>Q.</p>
-                <div {...stylex.props(styles.answerContent, flex.column)}>
-                    <p {...stylex.props(typo['Body/lines/Body3_14∙150_SemiBold_lines'])}>{question?.title}</p>
-                    <p {...stylex.props(typo['Body/lines/Body3_14∙150_Regular_lines'], styles.gray80)}>
-                        {question?.answerList?.[0]?.text || '작성된 답변이 없습니다.'}
-                    </p>
-                </div>
-                <p {...stylex.props(typo['Caption/Caption1_13∙100_SemiBold'], styles.mainColor)}>
-                    {question?.dateAt.replace(/-/g, '.')}
-                </p>
-            </div>
+    try {
+      const { data, error } = await supabase
+        .from('memo') // [검증] answer가 아니라 memo 테이블에 저장
+        .insert({
+          userId: user?.id,
+          questionId: questionId,
+          text: newMemo,
+          isDel: 0,
+        })
+        .select()
+        .single();
 
-            <div {...stylex.props(flex.column)}>
-                {memos.map(memo => (
-                    <div key={memo.id} {...stylex.props(styles.existingMemo, flex.column)}>
-                        <div {...stylex.props(flex.between, flex.vertical)}>
-                            <div {...stylex.props(flex.vertical, styles.gap8)}>
-                                <span {...stylex.props(styles.memoTag, typo['Caption/Caption2_12∙100_SemiBold'])}>추가한 메모</span>
-                                <span {...stylex.props(typo['Caption/Caption2_12∙100_Regular'], styles.gray70)}>
-                                    {format(new Date(memo.created_at), 'yyyy.MM.dd')}
-                                </span>
-                            </div>
-                            
-                            <div {...stylex.props(flex.vertical, styles.gap12)}>
-                                <button {...stylex.props(styles.editBtn)} onClick={() => { setEditingMemoId(memo.id); setEditText(memo.content); }}>
-                                    <span {...stylex.props(typo['Caption/Caption1_13∙100_SemiBold'], styles.mainColor)}>수정</span>
-                                </button>
-                                <button {...stylex.props(styles.editBtn)} onClick={() => { if(confirm('삭제할까요?')) deleteMutation.mutate(memo.id) }}>
-                                    <span {...stylex.props(typo['Caption/Caption1_13∙100_SemiBold'], styles.gray70)}>삭제</span>
-                                </button>
-                            </div>
-                        </div>
+      if (error) throw error;
 
-                        {editingMemoId === memo.id ? (
-                            <div {...stylex.props(flex.column, styles.editWrapper)}>
-                                <textarea 
-                                    {...stylex.props(styles.textarea, styles.editArea)} 
-                                    value={editText} 
-                                    onChange={(e) => setEditText(e.target.value)}
-                                    autoFocus
-                                />
-                                <div {...stylex.props(flex.vertical, styles.editActions)}>
-                                    <button {...stylex.props(styles.textBtn)} onClick={() => setEditingMemoId(null)}>취소</button>
-                                    <button {...stylex.props(styles.textBtn, styles.mainColor)} onClick={() => updateMutation.mutate({ id: memo.id, text: editText })}>저장</button>
-                                </div>
-                            </div>
-                        ) : (
-                            <p {...stylex.props(typo['Body/lines/Body3_14∙150_Regular_lines'], styles.gray80)}>{memo.content}</p>
-                        )}
-                    </div>
-                ))}
-            </div>
+      // 화면에 즉시 반영
+      setMemos([...memos, data]);
+      setNewMemo('');
+    } catch (e) {
+      console.error(e);
+      alert('메모 저장 실패');
+    } finally {
+      setLoading(false);
+    }
+  };
 
-            <div {...stylex.props(styles.inputSection, flex.column)}>
-                <div {...stylex.props(flex.between, flex.vertical, styles.inputHeader)}>
-                    <p {...stylex.props(typo['Body/Body3_14∙100_SemiBold'], styles.primaryBlack)}>추가할 메모</p>
-                    <p {...stylex.props(typo['Caption/Caption2_12∙100_Regular'], styles.gray70)}>({newMemoText.length}/{maxLength})</p>
-                </div>
-                <div {...stylex.props(styles.inputDivider)} />
-                <textarea
-                    {...stylex.props(styles.textarea)}
-                    placeholder='기록하고 싶은 생각을 남겨보세요.'
-                    maxLength={maxLength}
-                    value={newMemoText}
-                    onChange={e => setNewMemoText(e.target.value)}
-                />
-            </div>
+  if (!question) return <div className="p-5">로딩 중...</div>;
 
-            <div {...stylex.props(styles.spacer)} />
-            <div {...stylex.props(styles.submitWrap)}>
-                <Button variants='primary' disabled={!newMemoText.trim() || addMutation.isPending} onClick={handleAddMemo}>
-                    {addMutation.isPending ? '저장 중...' : '메모 추가하기'}
-                </Button>
-            </div>
-        </section>
-    );
+  return (
+    <div {...stylex.props(styles.base, flex.column)}>
+      {/* 질문 영역 */}
+      <div {...stylex.props(styles.section)}>
+        <p {...stylex.props(typo['Body/Body2_15∙150_Regular'], styles.date)}>{question.dateAt}</p>
+        <h2 {...stylex.props(typo['Heading/H3_20∙130_SemiBold'])}>{question.title}</h2>
+      </div>
+
+      {/* 내 답변 영역 (수정 불가, 보기 전용) */}
+      <div {...stylex.props(styles.answerCard)}>
+        <p {...stylex.props(typo['Body/Body1_16∙150_Regular'])}>
+          {myAnswer ? myAnswer.text : '아직 답변을 남기지 않았습니다.'}
+        </p>
+      </div>
+
+      <hr {...stylex.props(styles.divider)} />
+
+      {/* 메모 리스트 (추가된 생각들) */}
+      <div {...stylex.props(styles.memoList, flex.column)}>
+        {memos.map((memo) => (
+          <div key={memo.id} {...stylex.props(styles.memoItem)}>
+            <div {...stylex.props(styles.memoDot)} />
+            <p {...stylex.props(typo['Body/Body2_15∙150_Regular'])}>{memo.text}</p>
+          </div>
+        ))}
+      </div>
+
+      {/* 메모 입력창 (하단 고정) */}
+      <div {...stylex.props(styles.inputWrap, flex.vertical)}>
+        <input
+          type="text"
+          {...stylex.props(styles.input)}
+          placeholder="생각 덧붙이기..."
+          value={newMemo}
+          onChange={(e) => setNewMemo(e.target.value)}
+          onKeyDown={(e) => e.key === 'Enter' && handleAddMemo()}
+        />
+        <button {...stylex.props(styles.sendBtn)} onClick={handleAddMemo} disabled={loading}>
+          ↑
+        </button>
+      </div>
+    </div>
+  );
 }
 
 const styles = stylex.create({
-    base: { padding: '24px 18px', minHeight: 'calc(100vh - 50px)', gap: 0 },
-    answerCard: { width: '100%', padding: 16, border: `1px solid ${colors.main}`, borderRadius: 14, gap: 12 },
-    answerContent: { gap: 8 },
-    mainColor: { color: colors.main },
-    gray80: { color: colors.gray80 },
-    gray70: { color: colors.gray70 },
-    primaryBlack: { color: colors.gray90 },
-    existingMemo: { marginTop: 16, padding: '12px 0', borderBottom: `1px solid ${colors.gray40}`, gap: 8 },
-    memoTag: { display: 'inline-flex', padding: '3px 8px', borderRadius: 4, backgroundColor: colors.secondary, color: colors.main },
-    editBtn: { backgroundColor: 'transparent', border: 'none', cursor: 'pointer', padding: '4px 0' },
-    textBtn: { backgroundColor: 'transparent', border: 'none', cursor: 'pointer' },
-    inputSection: { marginTop: 24 },
-    inputHeader: { marginBottom: 8 },
-    inputDivider: { width: '100%', height: 1, backgroundColor: colors.main, marginBottom: 16 },
-    textarea: { width: '100%', minHeight: 100, border: 'none', outline: 'none', resize: 'none', fontSize: 14, lineHeight: '150%', color: colors.gray90, backgroundColor: 'transparent' },
-    editWrapper: { gap: 8, marginTop: 12 },
-    editActions: { gap: 8, justifyContent: 'flex-end' },
-    editArea: { padding: 8, backgroundColor: colors.gray20, borderRadius: 8 },
-    spacer: { flexGrow: 1 },
-    submitWrap: { position: 'sticky', bottom: 16, width: '100%', paddingTop: 16, backgroundColor: '#fff' },
-    gap8: { gap: 8 },
-    gap12: { gap: 12 },
+  base: { padding: '20px', minHeight: '100vh', backgroundColor: '#fff', paddingBottom: 80 },
+  section: { marginBottom: 20 },
+  date: { color: colors.gray60, marginBottom: 4 },
+  answerCard: {
+    padding: 16, backgroundColor: colors.gray20, borderRadius: 12, marginBottom: 24
+  },
+  divider: {
+    border: 'none', borderTop: `1px solid ${colors.gray30}`, margin: '0 0 24px 0'
+  },
+  memoList: { gap: 12 },
+  memoItem: { display: 'flex', gap: 10, alignItems: 'flex-start' },
+  memoDot: {
+    width: 6, height: 6, borderRadius: '50%', backgroundColor: colors.gray40, marginTop: 8
+  },
+  inputWrap: {
+    position: 'fixed', bottom: 0, left: 0, right: 0,
+    padding: '12px 20px', backgroundColor: '#fff', borderTop: `1px solid ${colors.gray30}`,
+    gap: 8
+  },
+  input: {
+    flex: 1, padding: '10px 14px', borderRadius: 20,
+    border: `1px solid ${colors.gray40}`, outline: 'none', fontSize: 14
+  },
+  sendBtn: {
+    width: 36, height: 36, borderRadius: '50%', backgroundColor: colors.main,
+    color: '#fff', border: 'none', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center'
+  }
 });

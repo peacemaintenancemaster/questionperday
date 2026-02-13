@@ -29,6 +29,8 @@ function RouteComponent() {
     const search = useSearch({ from: '/' });
     const user = useUser();
     const navigate = useNavigate();
+    
+    // [중요] 사용자님의 커스텀 훅 사용
     const calendar = useCalendar<SearchSchema>(search);
 
     const [answeredDates, setAnsweredDates] = useState<Set<string>>(new Set());
@@ -36,10 +38,11 @@ function RouteComponent() {
     const [selectedAnswer, setSelectedAnswer] = useState<any>(null);
     const [latestAnswer, setLatestAnswer] = useState<any>(null);
 
-    // 1. 데이터 로드 (총 횟수, 파란 점용 날짜, 가장 최신 답변)
+    // 1. 데이터 로드 (누적 횟수, 파란 점, 최신 기록)
     useEffect(() => {
         if (!user) return;
         const fetchData = async () => {
+            // 답변한 날짜 목록 가져오기 (파란 점 표시용)
             const { data: dateData } = await supabase
                 .from('answer')
                 .select('question:questionId ( dateAt )')
@@ -51,6 +54,7 @@ function RouteComponent() {
                 setAnsweredDates(dates as Set<string>);
             }
 
+            // 누적 답변 횟수
             const { count } = await supabase
                 .from('answer')
                 .select('*', { count: 'exact', head: true })
@@ -58,9 +62,10 @@ function RouteComponent() {
                 .eq('isDel', 0);
             if (count !== null) setTotalCount(count);
 
+            // 가장 최신 답변 1건 (하단 섹션 노출용)
             const { data: latest } = await supabase
                 .from('answer')
-                .select(`*, question:questionId ( title, dateAt )`)
+                .select('*, question:questionId ( title, dateAt )')
                 .eq('userId', user.id)
                 .eq('isDel', 0)
                 .order('createdAt', { ascending: false })
@@ -71,14 +76,14 @@ function RouteComponent() {
         fetchData();
     }, [user]);
 
-    // 2. 날짜 선택 시 해당 날짜의 답변 체크
+    // 2. 날짜 선택 시 해당 날짜의 답변 데이터 조회
     useEffect(() => {
         if (!user) return;
         const fetchSelected = async () => {
             const dateStr = format(calendar.currentSelectedDate, 'yyyy-MM-dd');
             const { data } = await supabase
                 .from('answer')
-                .select(`*, question:questionId ( title, dateAt )`)
+                .select('*, question:questionId ( title, dateAt )')
                 .eq('userId', user.id)
                 .eq('isDel', 0)
                 .filter('question.dateAt', 'eq', dateStr)
@@ -88,7 +93,7 @@ function RouteComponent() {
         fetchSelected();
     }, [calendar.currentSelectedDate, user]);
 
-    // [중요] 숫자가 겹치지 않게 '장식'만 담당 (숫자는 Calendar 컴포넌트가 그림)
+    // [해결] renderCell은 장식(원, 점)만 담당. 숫자는 Calendar 컴포넌트가 직접 그림.
     const renderCell = ({ date }: { date: Date }) => {
         const isSelected = isSameDay(date, calendar.currentSelectedDate);
         const formattedDate = format(date, 'yyyy-MM-dd');
@@ -97,15 +102,16 @@ function RouteComponent() {
 
         return (
             <div {...stylex.props(styles.cellWrap)}>
-                {/* 선택 시 파란 원 배경 */}
-                <div {...stylex.props(isSelected && styles.circle)} />
-                {/* 답변 완료 시 하단 파란 점 */}
+                {/* 선택 효과: 배경 원 */}
+                {isSelected && <div {...stylex.props(styles.circle)} />}
+                {/* 답변 여부: 하단 파란 점 */}
                 {hasAnswer && !isFuture && <div {...stylex.props(styles.dot)} />}
             </div>
         );
     };
 
     const handleDayClick = (date: Date) => {
+        // 미래 날짜 클릭 방지
         if (isAfter(startOfDay(date), startOfDay(new Date()))) return;
         calendar.onClickDay(date);
     };
@@ -122,12 +128,12 @@ function RouteComponent() {
                 </p>
             </div>
 
-            {/* 메인 캘린더 (사용자님 원본 커스텀 컴포넌트) */}
+            {/* 사용자님의 원래 커스텀 캘린더 (월간 뷰 유지) */}
             <div {...stylex.props(styles.calendar)}>
                 <Calendar {...calendar} onClickDay={handleDayClick} renderCell={renderCell} />
             </div>
 
-            {/* 선택 날짜 상세 영역 */}
+            {/* 선택한 날짜의 답변/질문 영역 */}
             <div {...stylex.props(styles.section)}>
                 <p {...stylex.props(typo['Body/Body1_16∙100_SemiBold'], styles.mb16, styles.primaryBlack)}>
                     {format(calendar.currentSelectedDate, 'yyyy.MM.dd')}
@@ -148,7 +154,7 @@ function RouteComponent() {
                 )}
             </div>
 
-            {/* 누적 기록 섹션 (최신 기록 + 전체보기) */}
+            {/* 나의 기록들 섹션 (최신 기록 1건 + 전체보기 버튼) */}
             <div {...stylex.props(styles.section, flex.column)}>
                 <div {...stylex.props(flex.between, flex.vertical, styles.mb16)}>
                     <h4 {...stylex.props(typo['Body/Body1_16∙100_SemiBold'], styles.primaryBlack)}>나의 기록들</h4>

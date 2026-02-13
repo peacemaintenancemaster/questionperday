@@ -1,7 +1,12 @@
 {
   "dependencies": {
+    "@stylexjs/stylex": "^0.17.5",
+    "@tanstack/react-router": "^1.159.5",
+    "@tanstack/zod-adapter": "^1.159.5",
     "date-fns": "^4.1.0",
     "dayjs": "^1.11.19",
-    "react-calendar": "^6.0.0"
+    "react": "^19.2.4",
+    "react-calendar": "^6.0.0",
+    "zod": "^4.3.6"
   }
 }

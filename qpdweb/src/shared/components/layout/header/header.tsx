@@ -77,15 +77,17 @@ export const Header = ({ variant, onClickCallback }: Props) => {
 			<div {...styleX.props(styles.buttonGroup, flex.vertical)}>
 				{/* Dark mode toggle */}
 				<button
-					{...styleX.props(styles.button)}
-					onClick={toggleTheme}
-					aria-label={isDark ? '라이트 모드로 전환' : '다크 모드로 전환'}>
-					{isDark ? (
-						<Icon.Sun size='24' color={iconColor} />
-					) : (
-						<Icon.Moon size='24' color={iconColor} />
-					)}
-				</button>
+    {...styleX.props(styles.button)}
+    onClick={toggleTheme}
+    aria-label={isDark ? '라이트 모드로 전환' : '다크 모드로 전환'}>
+    {isDark ? (
+        // [수정] 다크모드일 땐 태양을 '흰색'으로 강제 설정
+        <Icon.Sun size='24' color='#ffffff' />
+    ) : (
+        // 라이트모드일 땐 기존대로 (보통 검은색)
+        <Icon.Moon size='24' color={iconColor} />
+    )}
+</button>
 
 				{isQuestionPath ? (
 					<button

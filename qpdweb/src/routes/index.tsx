@@ -1,502 +1,215 @@
-import {
-	createFileRoute,
-	useNavigate,
-	useSearch,
-} from '@tanstack/react-router';
+import { createFileRoute, useNavigate } from '@tanstack/react-router';
 import * as stylex from '@stylexjs/stylex';
 import { colors, flex, typo } from '~/shared/style/common.stylex';
-import { zodValidator } from '@tanstack/zod-adapter';
-import { z } from 'zod';
-import { useCalendar } from '~/shared/hooks/useCalendar';
-import { Calendar } from '~/domain/home/calendar/calendar';
-import { isSameDay, isToday } from 'date-fns';
-import { format } from 'date-fns';
-import { useGetAnswerByMonth } from '~/domain/answer/hooks/useGetAnswerByMonth';
-import useModal from '~/shared/hooks/useModal';
-import { LoginBottomSheet } from '~/shared/components/ui/bottom-sheet/login/login-bottom-sheet';
+import Calendar from 'react-calendar'; 
+import 'react-calendar/dist/Calendar.css';
+import { isSameDay, isAfter, startOfDay, format } from 'date-fns';
 import { useEffect, useState } from 'react';
-import { useUserStore } from '~/domain/user/store';
-import { useGetAnswerCounts } from '~/domain/answer/hooks/useGetAnswerCounts';
-import { useGetAnswerByDate } from '~/domain/answer/hooks/useGetAnswerByDate';
-import { AnswerItem } from '~/domain/answer/components/item/answer-item';
-import { Button } from '~/shared/components/ui/button/button';
-import { useMockStore, useMockActions } from '~/shared/store/mock-data';
-import { AnswerDownloadCard } from '~/domain/answer/components/download/answer-download-card';
-import { useAnswerDownload } from '~/domain/answer/hooks/useAnswerDownload';
+import { useUser } from '~/domain/user/store';
+import { supabase } from '~/lib/supabase';
 
-const searchSchema = z.object({
-	dateAt: z.string().optional(),
-});
-
-type SearchSchema = z.infer<typeof searchSchema>;
+// 캘린더 라이브러리 타입 정의 (에러 방지용)
+type ValuePiece = Date | null;
+type Value = ValuePiece | [ValuePiece, ValuePiece];
 
 export const Route = createFileRoute('/')({
-	component: RouteComponent,
-	validateSearch: zodValidator(searchSchema),
+  component: RouteComponent,
 });
 
 function RouteComponent() {
-	const search = useSearch({ from: '/' });
-	const isLogin = useUserStore(s => s.isLogin);
-	const calendar = useCalendar<SearchSchema>(search);
-	const { data: answerCountData } = useGetAnswerByMonth(
-		format(calendar.startOfCurrentMonth, 'yyyy-MM-dd'),
-	);
-	const { data: answerTotalCount } = useGetAnswerCounts();
-	const { data: answerDataByDate } = useGetAnswerByDate(
-		format(calendar.currentSelectedDate, 'yyyy-MM-dd'),
-	);
-	const LoginPortal = useModal('login');
-	const [shouldRender, setShouldRender] = useState(false);
-	const navigate = useNavigate();
+  const user = useUser();
+  const navigate = useNavigate();
+  
+  // 캘린더 상태 및 데이터 상태
+  const [value, setValue] = useState<Value>(new Date());
+  const [answeredDates, setAnsweredDates] = useState<Set<string>>(new Set());
+  const [totalCount, setTotalCount] = useState(0); // [추가] 총 답변 수 저장
 
-	// Download card
-	const { cardRef: downloadCardRef, download: downloadAnswer } =
-		useAnswerDownload();
-	const [downloadQuestion, setDownloadQuestion] = useState('');
-	const [downloadAnswerText, setDownloadAnswerText] = useState('');
+  // 1. 데이터 가져오기 (답변한 날짜들 & 총 개수)
+  useEffect(() => {
+    if (!user) {
+        setTotalCount(0);
+        return;
+    }
 
-	const handleDownload = (question: string, answerText: string) => {
-		setDownloadQuestion(question);
-		setDownloadAnswerText(answerText);
-		downloadAnswer();
-	};
+    const fetchData = async () => {
+      // (1) 답변한 날짜 가져오기 (파란 점 용)
+      const { data: dateData } = await supabase
+        .from('answer')
+        .select('question:questionId ( dateAt )')
+        .eq('userId', user.id)
+        .eq('isDel', 0);
 
-	// Mock data for testing
-	const mockActions = useMockActions();
-	const mockQuestions = useMockStore(s => s.questions);
-	const useMock = !isLogin;
+      if (dateData) {
+        const dates = new Set(dateData.map((item: any) => item.question?.dateAt).filter(Boolean));
+        setAnsweredDates(dates as Set<string>);
+      }
 
-	const selectedDateStr = format(
-		calendar.currentSelectedDate,
-		'yyyy-MM-dd',
-	);
-	const mockQuestionByDate = useMock
-		? mockActions.getQuestionByDate(selectedDateStr)
-		: undefined;
-	const mockLatestMemo = mockQuestionByDate
-		? mockActions.getLatestMemoByQuestion(mockQuestionByDate.id)
-		: undefined;
+      // (2) 총 답변 개수 가져오기 (카운트 용)
+      const { count, error } = await supabase
+        .from('answer')
+        .select('*', { count: 'exact', head: true }) // 데이터를 다 가져오지 않고 숫자만 셉니다
+        .eq('userId', user.id)
+        .eq('isDel', 0);
+      
+      if (!error && count !== null) {
+        setTotalCount(count);
+      }
+    };
 
-	const currentMonthStr = format(
-		calendar.startOfCurrentMonth,
-		'yyyy-MM',
-	);
-	const mockAnswerCountMap = useMock
-		? mockActions.getAnswerCountByMonth(currentMonthStr)
-		: {};
+    fetchData();
+  }, [user]);
 
-	const mockAllQuestions = useMock ? mockActions.getAllQuestions() : [];
-	const mockLatestAnswer = mockAllQuestions[0];
-	const mockLatestAnswerMemo = mockLatestAnswer
-		? mockActions.getLatestMemoByQuestion(mockLatestAnswer.id)
-		: undefined;
+  // 캘린더 변경 핸들러 (타입 에러 방지)
+  const handleDateChange = (nextValue: Value) => {
+    if (nextValue instanceof Date) {
+      if (isAfter(startOfDay(nextValue), startOfDay(new Date()))) return;
+    }
+    setValue(nextValue);
+  };
 
-	// Effective data (API or mock)
-	const effectiveAnswerCountMap = isLogin
-		? answerCountData?.answerDateCountMap
-		: mockAnswerCountMap;
-	const effectiveTotalCount = isLogin
-		? answerTotalCount?.answerCounts
-		: mockQuestions.length;
-	const effectiveQuestionByDate = isLogin
-		? answerDataByDate?.question
-		: mockQuestionByDate;
-	const effectiveHasAnswer = isLogin
-		? Boolean(answerDataByDate?.question?.answerList?.length)
-		: Boolean(mockQuestionByDate);
+  // 캘린더 셀 렌더링
+  const renderCell = ({ date }: { date: Date }) => {
+    let isSelected = false;
+    if (value instanceof Date) {
+      isSelected = isSameDay(date, value);
+    } else if (Array.isArray(value) && value[0]) {
+       isSelected = isSameDay(date, value[0] as Date);
+    }
 
-	useEffect(() => {
-		const timer = requestAnimationFrame(() => {
-			setShouldRender(true);
-		});
-		return () => cancelAnimationFrame(timer);
-	}, [isLogin]);
+    const dateStr = format(date, 'yyyy-MM-dd');
+    const hasAnswer = answeredDates.has(dateStr);
+    const isFuture = isAfter(startOfDay(date), startOfDay(new Date()));
 
-	useEffect(() => {
-		if (isLogin) {
-			LoginPortal.close();
-			return;
-		}
-		// Don't show login for testing
-	}, [isLogin, shouldRender]);
+    return (
+      <div {...stylex.props(styles.cellWrap, isFuture && styles.disabledCell)}>
+        <div {...stylex.props(isSelected && styles.circle)} />
+        <div
+          {...stylex.props(
+            styles.cell,
+            isFuture && styles.gray,
+            isSelected && styles.white,
+            typo['Caption/Caption2_12∙100_SemiBold'],
+          )}
+        >
+          {date.getDate()}
+        </div>
+        {hasAnswer && !isFuture && <div {...stylex.props(styles.dot)} />}
+      </div>
+    );
+  };
 
-	const onClickOpenLoginBottomSheet = () => {
-		LoginPortal.open();
-	};
+  const selectedDateStr = value instanceof Date ? format(value, 'yyyy.MM.dd') : '';
 
-	const renderCell = ({ date }: { date: Date }) => {
-		const isCurrentMonth =
-			date.getMonth() === calendar.startOfCurrentMonth.getMonth();
+  return (
+    <section {...stylex.props(styles.base)}>
+      {/* [수정됨] 프로모션 배너 섹션 */}
+      <div {...stylex.props(styles.promotion, flex.column)}>
+        <div
+            {...stylex.props(styles.promotionTitle, flex.vertical)}
+            // 클릭 시 로그인 유도 등 필요한 액션 추가 가능
+        >
+            <img
+                src='/image/icon/mail.png' // 아이콘 경로가 맞는지 확인 필요 (없으면 엑박 뜰 수 있음)
+                alt='아이콘'
+                {...stylex.props(styles.promotionIcon)}
+                onError={(e) => e.currentTarget.style.display = 'none'} // 이미지 없으면 숨김
+            />
 
-		const isSelected = isSameDay(date, calendar.currentSelectedDate);
+            <h3
+                {...stylex.props(
+                    styles.primaryBlack,
+                    typo['Heading/lines/H3_20∙130_SemiBold_lines'],
+                )}>
+                <>
+                    {'지금까지 '}
+                    <span {...stylex.props(styles.primaryColor)}>
+                        {'총 '}
+                        {totalCount} {/* [수정] 실제 데이터 연동 */}
+                        {'번'}
+                    </span>
+                    {' 기록했어요!'} {/* [수정] 멘트 변경 */}
+                </>
+            </h3>
+        </div>
+        <p
+            {...stylex.props(
+                typo['Body/lines/Body3_14∙150_Regular_lines'],
+                styles.promotionSub,
+            )}>
+            {'오늘 떠오른 생각도 가볍게 기록해 보세요.'} {/* [수정] 멘트 변경 */}
+        </p>
+      </div>
 
-		const formattedDate = format(date, 'yyyy-MM-dd');
+      {/* 캘린더 영역 */}
+      <div {...stylex.props(styles.calendar)}>
+        <Calendar
+          onChange={handleDateChange}
+          value={value}
+          formatDay={(locale, date) => format(date, 'd')}
+          tileContent={renderCell}
+          tileDisabled={({ date }) => isAfter(startOfDay(date), startOfDay(new Date()))}
+          next2Label={null}
+          prev2Label={null}
+        />
+      </div>
 
-		const hasAnswer = Boolean(effectiveAnswerCountMap?.[formattedDate]);
-
-		return (
-			<div {...stylex.props(styles.cellWrap)}>
-				<div {...stylex.props(isSelected && styles.circle)} />
-
-				<div
-					data-cell=""
-					{...(!isCurrentMonth || (!isSelected && !hasAnswer)) ? { 'data-cell-gray': '' } : {}}
-					{...(isSelected ? { 'data-cell-white': '' } : {})}
-					{...stylex.props(
-						styles.cell,
-						!isCurrentMonth && styles.gray,
-						!isSelected && !hasAnswer && styles.gray,
-						isSelected && styles.white,
-						typo['Caption/Caption2_12∙100_SemiBold'],
-					)}>
-					{date.getDate()}
-				</div>
-
-				{hasAnswer && <div {...stylex.props(styles.dot)} />}
-			</div>
-		);
-	};
-
-	// Override calendar click to allow clicking on mock dates
-	const handleDayClick = (date: Date) => {
-		calendar.onClickDay(date);
-	};
-
-	return (
-		<section {...stylex.props(styles.base)}>
-			{/* Promotion Banner */}
-			<div data-promotion {...stylex.props(styles.promotion, flex.column)}>
-				<div
-					{...stylex.props(styles.promotionTitle, flex.vertical)}
-					onClick={onClickOpenLoginBottomSheet}>
-					<img
-						src='/image/icon/mail.png'
-						alt='프로모션 아이콘'
-						{...stylex.props(styles.promotionIcon)}
-					/>
-
-					<h3
-						{...stylex.props(
-							styles.primaryBlack,
-							typo['Heading/lines/H3_20∙130_SemiBold_lines'],
-						)}>
-						<>
-							{'지금까지 '}
-							<span {...stylex.props(styles.primaryColor)}>
-								{'총 '}
-								{effectiveTotalCount ?? 0}
-								{'번'}
-							</span>
-							{' 답변했어요!'}
-						</>
-					</h3>
-				</div>
-				<p
-					{...stylex.props(
-						typo['Body/lines/Body3_14∙150_Regular_lines'],
-						styles.promotionSub,
-					)}>
-					{'30개의 생각을 하루도 빠짐 없이 기록하면,'}
-					{'\n'}
-					{'~를 보내드려요.'}
-				</p>
-			</div>
-
-			{/* Calendar */}
-			<div data-calendar-wrap {...stylex.props(styles.calendar)}>
-				<Calendar
-					{...calendar}
-					onClickDay={handleDayClick}
-					renderCell={renderCell}
-				/>
-			</div>
-
-			{/* Date Answer Section */}
-			<div {...stylex.props(styles.answerWrap, flex.column)}>
-				<div
-					{...stylex.props(
-						styles.answerDateWrap,
-						flex.between,
-						flex.vertical,
-					)}>
-					<p
-						data-primary-black
-						{...stylex.props(
-							typo['Body/Body1_16∙100_SemiBold'],
-							styles.primaryBlack,
-						)}>
-						{format(calendar.currentSelectedDate, 'yyyy.MM.dd')}
-						{' 답변'}
-					</p>
-
-					{effectiveHasAnswer && (
-						<button
-							{...stylex.props(styles.addMemoBtn, flex.vertical)}
-							onClick={() => {
-								const q = effectiveQuestionByDate;
-								if (q) {
-									navigate({
-										to: '/answer/memo',
-										search: { questionId: q.id },
-									});
-								}
-							}}>
-							<span
-								{...stylex.props(
-									styles.mainColor,
-									typo['Caption/Caption1_13∙100_SemiBold'],
-								)}>
-								{'+ 메모 추가'}
-							</span>
-						</button>
-					)}
-				</div>
-
-				{effectiveHasAnswer ? (
-					<AnswerItem
-						questionData={effectiveQuestionByDate}
-						latestMemo={
-							isLogin ? undefined : mockLatestMemo
-						}
-						onClick={() => {
-							const q = effectiveQuestionByDate;
-							if (q) {
-								navigate({
-									to: '/answer/memo',
-									search: { questionId: q.id },
-								});
-							}
-						}}
-						onDownload={() => {
-							const q = effectiveQuestionByDate;
-							if (q) {
-								handleDownload(
-									q.title,
-									q.answerList[0]?.text ?? '',
-								);
-							}
-						}}
-					/>
-				) : (
-					<div {...stylex.props(flex.center, flex.column)}>
-						<p {...stylex.props(styles.answerFallbackText)}>
-							해당 일에 아직 답변이 없어요.
-						</p>
-
-						{isToday(new Date()) && (
-							<div {...stylex.props(styles.buttonWidthWrap)}>
-								<Button
-									onClick={() => navigate({ to: '/question' })}
-									variants='primary'>
-									지금 답변하러 가기
-								</Button>
-							</div>
-						)}
-					</div>
-				)}
-			</div>
-
-			{/* My All Answers Section */}
-			<div data-all-answers {...stylex.props(styles.allAnswerSection)}>
-				<div
-					{...stylex.props(
-						styles.allAnswerHeader,
-						flex.between,
-						flex.vertical,
-					)}>
-					<p
-						data-primary-black
-						{...stylex.props(
-							typo['Body/Body1_16∙100_SemiBold'],
-							styles.primaryBlack,
-						)}>
-						나의 모든 답변
-					</p>
-
-					<button
-						{...stylex.props(styles.viewAllBtn)}
-						onClick={() => navigate({ to: '/answer' })}>
-						<span
-							{...stylex.props(
-								styles.mainColor,
-								typo['Caption/Caption1_13∙100_SemiBold'],
-							)}>
-							전체보기
-						</span>
-					</button>
-				</div>
-
-				{(isLogin ? effectiveQuestionByDate : mockLatestAnswer) ? (
-					<AnswerItem
-						questionData={
-							isLogin ? effectiveQuestionByDate : mockLatestAnswer
-						}
-						latestMemo={isLogin ? undefined : mockLatestAnswerMemo}
-						onClick={() => {
-							const q = isLogin
-								? effectiveQuestionByDate
-								: mockLatestAnswer;
-							if (q) {
-								navigate({
-									to: '/answer/memo',
-									search: { questionId: q.id },
-								});
-							}
-						}}
-						onDownload={() => {
-							const q = isLogin
-								? effectiveQuestionByDate
-								: mockLatestAnswer;
-							if (q) {
-								handleDownload(
-									q.title,
-									q.answerList[0]?.text ?? '',
-								);
-							}
-						}}
-					/>
-				) : (
-					<div {...stylex.props(flex.center, styles.emptyAllAnswer)}>
-						<p {...stylex.props(styles.answerFallbackText)}>
-							아직 답변이 없어요.
-						</p>
-					</div>
-				)}
-			</div>
-
-			{shouldRender && !isLogin && (
-				<LoginPortal.Render type='bottomSheet' animationType='bottomSheet'>
-					<LoginBottomSheet />
-				</LoginPortal.Render>
-			)}
-
-			{/* Hidden download card for image capture */}
-			<div
-				{...stylex.props(styles.hiddenDownloadCard)}
-				ref={downloadCardRef}>
-				<AnswerDownloadCard
-					question={downloadQuestion}
-					answer={downloadAnswerText}
-				/>
-			</div>
-		</section>
-	);
+      {/* 하단 답변 영역 */}
+      <div {...stylex.props(styles.answerWrap, flex.center, flex.column)}>
+        <p {...stylex.props(typo['Body/Body1_16∙100_SemiBold'], styles.primaryBlack)}>
+          {selectedDateStr}
+        </p>
+        
+        {!user ? (
+            <p className="text-gray-500 mt-4 text-sm">로그인 후 기록을 시작해보세요!</p>
+        ) : (
+            <button
+            className="mt-4 px-6 py-3 bg-blue-600 text-white rounded-full font-bold shadow-md hover:bg-blue-700 transition"
+            onClick={() => {
+                navigate({ to: '/question' });
+            }}
+            >
+            오늘의 질문 답하기
+            </button>
+        )}
+      </div>
+    </section>
+  );
 }
 
 const styles = stylex.create({
-	base: {
-		padding: '24px 18px',
-		paddingBottom: 60,
-	},
-	promotion: {
-		width: '100%',
-		padding: '16px',
-		borderRadius: 14,
-		backgroundColor: colors.gray20,
-		gap: 8,
-	},
-	promotionTitle: {
-		gap: 8,
-	},
-	promotionIcon: {
-		width: 40,
-		height: 40,
-	},
-	promotionSub: {
-		color: colors.gray80,
-		paddingLeft: 48,
-	},
-	primaryBlack: {
-		color: colors.gray90,
-	},
-	primaryColor: {
-		color: colors.main,
-	},
-	mainColor: {
-		color: colors.main,
-	},
-	gray: {
-		color: colors.gray80,
-	},
-	white: {
-		color: colors.white,
-	},
-	calendar: {
-		paddingTop: 28,
-		paddingBottom: 32,
-		borderBottom: `1px solid ${colors.gray40}`,
-		marginBottom: 24,
-	},
-	cellWrap: {
-		position: 'relative',
-		justifyContent: 'center',
-		alignItems: 'center',
-		display: 'flex',
-		flexDirection: 'column',
-		gap: 4,
-	},
-	circle: {
-		position: 'absolute',
-		top: 4,
-		borderRadius: '50%',
-		width: 22,
-		height: 22,
-		zIndex: 0,
-		backgroundColor: colors.main,
-	},
-	cell: {
-		position: 'relative',
-		zIndex: 1,
-		borderRadius: '50%',
-		color: colors.gray90,
-		padding: 10,
-	},
-	dot: {
-		width: 4,
-		borderRadius: '50%',
-		height: 4,
-		backgroundColor: colors.main,
-	},
-	answerWrap: {
-		gap: 16,
-	},
-	answerDateWrap: {},
-	answerFallbackText: {
-		color: colors.gray80,
-		fontSize: 14,
-		lineHeight: '150%',
-		textAlign: 'center',
-		marginTop: 16,
-		marginBottom: 16,
-	},
-	buttonWidthWrap: {
-		width: 200,
-	},
-	addMemoBtn: {
-		gap: 4,
-		cursor: 'pointer',
-	},
-	allAnswerSection: {
-		marginTop: 32,
-		paddingTop: 24,
-		borderTop: `1px solid ${colors.gray40}`,
-		display: 'flex',
-		flexDirection: 'column',
-		gap: 16,
-	},
-	allAnswerHeader: {},
-	viewAllBtn: {
-		cursor: 'pointer',
-	},
-	emptyAllAnswer: {
-		padding: '24px 0',
-	},
-	hiddenDownloadCard: {
-		position: 'fixed',
-		top: -9999,
-		left: -9999,
-		zIndex: -1,
-		pointerEvents: 'none',
-	},
+  base: { padding: '24px 18px', paddingBottom: 60 },
+  // 배너 스타일
+  promotion: {
+    width: '100%',
+    padding: '16px',
+    borderRadius: 14,
+    backgroundColor: colors.gray20,
+    gap: 8,
+    marginBottom: 24, // 캘린더와 간격
+  },
+  promotionTitle: {
+    gap: 8,
+  },
+  promotionIcon: {
+    width: 24,
+    height: 24,
+    objectFit: 'contain',
+  },
+  promotionSub: {
+    color: colors.gray80,
+    paddingLeft: 32, // 아이콘 너비 + 간격 만큼 들여쓰기
+  },
+  
+  calendar: { paddingTop: 10, paddingBottom: 32, borderBottom: `1px solid ${colors.gray40}`, marginBottom: 24 },
+  cellWrap: { position: 'relative', justifyContent: 'center', alignItems: 'center', display: 'flex', flexDirection: 'column', gap: 4, cursor: 'pointer' },
+  disabledCell: { cursor: 'not-allowed', opacity: 0.5 },
+  circle: { position: 'absolute', top: 4, borderRadius: '50%', width: 22, height: 22, zIndex: 0, backgroundColor: colors.main },
+  cell: { position: 'relative', zIndex: 1, borderRadius: '50%', color: colors.gray90, padding: 10 },
+  dot: { width: 4, borderRadius: '50%', height: 4, backgroundColor: colors.main },
+  gray: { color: colors.gray80 },
+  white: { color: colors.white },
+  primaryBlack: { color: colors.gray90 },
+  primaryColor: { color: colors.main },
+  answerWrap: { marginTop: 20 },
 });

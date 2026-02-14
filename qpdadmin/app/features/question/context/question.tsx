@@ -38,11 +38,11 @@ export type Action =
 	  }
 	| {
 			type: 'SAVE';
-			payload: QuestionBaseSchema;
+			payload: QuestionSchemaWithType;
 	  }
 	| {
 			type: 'SAVE_LIST';
-			payload: QuestionBaseSchema;
+			payload: QuestionSchemaWithType;
 	  }
 	| {
 			type: 'LIST';
@@ -69,9 +69,7 @@ function reducer(state: State, action: Action) {
 				break;
 
 			case 'SAVE':
-				(draft.calendarMap[
-					format(new Date(action.payload.dateAt), 'yyyy-MM-dd')
-				] as any) = action.payload;
+				draft.calendarMap[format(new Date(action.payload.dateAt), 'yyyy-MM-dd')] = action.payload;
 				break;
 
 			case 'SAVE_LIST':

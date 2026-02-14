@@ -46,7 +46,7 @@ export default function Home() {
 
 			if (isMonthLoaded) return;
 
-			const { questionDateMap } = await API.Question.getQuestionMap(dateAt);
+			const questionDateMap = await API.Question.getQuestionList(dateAt);
 
 			dispatch({
 				type: 'MONTH',
@@ -59,7 +59,7 @@ export default function Home() {
 		(async function () {
 			if (viewType !== 'list') return;
 
-			const { questionList } = await API.Question.getList(dateAt);
+			const questionList = await API.Question.getQuestionList(dateAt);
 
 			const formattedQuestion = formatQuestion(questionList);
 

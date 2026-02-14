@@ -1,7 +1,5 @@
-
-import { supabase } from '..';
-
-import { IQuestion, TQuestionList } from '@/types/question';
+import { supabase } from '../supabase';
+import type { QuestionBaseSchema } from '~/features/question/schema/question.add';
 
 const TABLE_NAME = 'question';
 
@@ -15,7 +13,7 @@ export const getQuestionList = async (dateAt: string) => {
   if (error) {
     throw error;
   }
-  return data as TQuestionList;
+  return data;
 };
 
 export const getQuestion = async (id: number) => {
@@ -24,30 +22,47 @@ export const getQuestion = async (id: number) => {
   if (error) {
     throw error;
   }
-  return data as IQuestion;
+  return data;
 };
 
-export const createQuestion = async (question: Omit<IQuestion, 'id'>) => {
-  const { data, error } = await supabase.from(TABLE_NAME).insert(question).select('*').single();
+export const add = async (data: QuestionBaseSchema) => {
+    const { data: insertedData, error } = await supabase
+        .from('question')
+        .insert([{ 
+            dateAt: data.dateAt,
+            title: data.title || "",
+            subText: data.subText || "",
+            needNickname: (data.needNickname ?? true) ? 1 : 0,
+            needPhone: (data.needPhone ?? false) ? 1 : 0,
+            logoImageId: data.logoImageId || null,
+            article: data.article || null,
+            timeAt: data.timeAt || null,
+        }])
+        .select()
+        .single();
 
   if (error) {
     throw error;
   }
-  return data as IQuestion;
+  return insertedData;
 };
 
-export const updateQuestion = async (question: IQuestion) => {
-  const { data, error } = await supabase
-    .from(TABLE_NAME)
-    .update(question)
-    .eq('id', question.id)
-    .select('*')
-    .single();
-
-  if (error) {
-    throw error;
-  }
-  return data as IQuestion;
+export const edit = async (id: number, data: QuestionBaseSchema) => {
+    const { data: updatedData, error } = await supabase
+        .from('question')
+        .update({ 
+            dateAt: data.dateAt,
+            subText: data.subText || "",
+            needNickname: (data.needNickname ?? true) ? 1 : 0,
+            needPhone: (data.needPhone ?? false) ? 1 : 0,
+            logoImageId: data.logoImageId || null,
+            article: data.article || null,
+            timeAt: data.timeAt || null,
+        })
+        .eq('id', id)
+        .select().single();
+    if (error) throw error;
+    return updatedData;
 };
 
 export const deleteQuestion = async (id: number) => {
@@ -56,5 +71,5 @@ export const deleteQuestion = async (id: number) => {
   if (error) {
     throw error;
   }
-  return data as IQuestion;
+  return data;
 };

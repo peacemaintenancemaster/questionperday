@@ -1,4 +1,5 @@
 import { supabase } from '~/api/supabase';
+import type { QuestionType } from '~/types/answer/answer';
 
 export type QuestionBaseSchema = {
 	title: string;
@@ -15,7 +16,7 @@ export type QuestionAddSchema = QuestionBaseSchema;
 
 export type QuestionSchemaWithType = QuestionBaseSchema & {
 	id: number;
-	type: 'saved' | 'temp';
+	type: QuestionType;
 };
 
 export const initBaseQuestion: QuestionBaseSchema = {

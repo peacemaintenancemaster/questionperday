@@ -119,7 +119,7 @@ export function MainCalendar(props: Props) {
 
 	async function onDeleteQuestion() {
 		try {
-			await API.Question.Del(questionId);
+			await API.Question.deleteQuestion(questionId);
 			dispatch({
 				type: 'DEL_QUESTION',
 				payload: dateAt,

@@ -139,7 +139,7 @@ export function QuestionListTable() {
 
 	async function onDeleteQuestion() {
 		try {
-			await API.Question.Del(questionId);
+			await API.Question.deleteQuestion(questionId);
 
 			dispatch({
 				type: 'DEL_QUESTION_LIST',

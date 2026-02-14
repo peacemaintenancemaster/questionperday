@@ -27,15 +27,24 @@ function QuestionPage() {
     const fetchTodayQuestion = async () => {
       setIsLoading(true);
       try {
-        // 가장 최근 질문 가져오기
+        // [수정] 한국 시간 기준 오늘 날짜 구하기
+        const now = new Date();
+        const kstDate = new Date(now.getTime() + 9 * 60 * 60 * 1000);
+        const todayStr = kstDate.toISOString().split('T')[0];
+
+        // [수정] created_at 정렬 제거 -> dateAt 필터로 변경
         const { data, error } = await supabase
           .from('question')
           .select('*')
-          .order('created_at', { ascending: false })
+          .eq('"dateAt"', todayStr) // created_at 대신 오늘 날짜로 찾기 (따옴표 필수)
           .limit(1)
-          .single();
+          .maybeSingle(); // single 대신 maybeSingle 사용 (데이터 없어도 에러 안 나게)
         
-        if (error || !data) {
+        if (error) {
+          console.error('질문 조회 에러:', error);
+          setShowNoQuestionModal(true);
+        } else if (!data) {
+          // 데이터가 없는 경우
           setShowNoQuestionModal(true);
         } else {
           setQuestion(data);
@@ -61,8 +70,8 @@ function QuestionPage() {
 
     try {
       const { error } = await supabase.from('answer').insert({
-        questionId: question?.id,
-        userId: user?.id,
+        questionId: question?.id, // 혹시 DB 컬럼이 question_id면 이걸로 수정 필요
+        userId: user?.id,         // 혹시 DB 컬럼이 user_id면 이걸로 수정 필요
         text: text,
         
         // [핵심] 값이 없으면 빈 문자열로 저장 (에러 안 나게)
@@ -112,9 +121,11 @@ function QuestionPage() {
       {/* 질문 타이틀 */}
       <div {...stylex.props(styles.header)}>
         <p {...stylex.props(typo['Body/Body2_15∙150_Regular'], styles.dateText)}>
+          {/* DB에 dateAt이 있으므로 뒤쪽이 렌더링됨 */}
           {question.display_date || question.dateAt}
         </p>
         <h2 {...stylex.props(typo['Heading/H3_20∙130_SemiBold'], styles.title)}>
+          {/* DB에 title이 있으므로 뒤쪽이 렌더링됨 */}
           {question.content || question.title}
         </h2>
       </div>

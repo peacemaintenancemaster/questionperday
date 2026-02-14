@@ -2,16 +2,6 @@ import { supabase } from '../supabase';
 import type { QuestionBaseSchema } from '~/features/question/schema/question.add';
 import type { QuestionBaseSchemaWithId } from '~/features/question/context/question';
 
-// [추가] 날짜 형식을 '26-02-11'에서 '2026-02-11'로 교정하는 헬퍼 함수
-const formatToFullDate = (dateStr: string) => {
-    if (!dateStr) return dateStr;
-    // '26-'로 시작하는 8자리 문자열이면 앞에 '20'을 붙여줍니다.
-    if (dateStr.length === 8 && dateStr.startsWith('26-')) {
-        return `20${dateStr}`;
-    }
-    return dateStr;
-};
-
 export const getQuestionMap = async (dateAt: string) => {
     const { data, error } = await supabase
         .from('question')
@@ -41,29 +31,14 @@ export const Del = async (id: number) => {
 };
 
 export const add = async (data: QuestionBaseSchema) => {
-    // 날짜 형식을 무조건 2026-MM-DD로 강제 변환합니다.
-    let finalDate = data.dateAt || "";
-    
-    if (typeof finalDate === 'string' && finalDate.includes('-')) {
-        const parts = finalDate.split('-');
-        // 연도가 26처럼 두 자리라면 앞에 20을 붙여 2026으로 만듭니다.
-        if (parts[0].length === 2) {
-            parts[0] = `20${parts[0]}`;
-        }
-        finalDate = parts.join('-');
-    }
-
-    // 서버로 보내기 직전의 값을 브라우저 콘솔(F12)에 출력합니다.
-    console.log("최종 저장 시도 날짜:", finalDate);
-
     const { data: insertedData, error } = await supabase
         .from('question')
         .insert([{ 
-            dateAt: finalDate,
+            dateAt: data.dateAt,
             title: data.title || "",
             subText: data.subText || "",
-            needNickname: Number(data.needNickname ?? true),
-            needPhone: Number(data.needPhone ?? false),
+            needNickname: data.needNickname ?? true,
+            needPhone: data.needPhone ?? false,
             logoImageId: data.logoImageId || null,
             article: data.article || null,
             timeAt: data.timeAt || null,
@@ -72,7 +47,6 @@ export const add = async (data: QuestionBaseSchema) => {
         .single();
 
     if (error) {
-        console.error("Supabase 상세 에러:", error.message);
         throw error;
     }
     return insertedData;
@@ -82,10 +56,10 @@ export const edit = async (id: number, data: QuestionBaseSchema) => {
     const { data: updatedData, error } = await supabase
         .from('question')
         .update({ 
-            dateAt: formatToFullDate(data.dateAt),
+            dateAt: data.dateAt,
             subText: data.subText || "",
-            needNickname: Number(data.needNickname ?? true),
-            needPhone: Number(data.needPhone ?? false),
+            needNickname: data.needNickname ?? true,
+            needPhone: data.needPhone ?? false,
             logoImageId: data.logoImageId || null,
             article: data.article || null,
             timeAt: data.timeAt || null,

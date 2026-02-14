@@ -22,11 +22,11 @@ export const getQuestionMap = async (dateAt: string) => {
     const questionDateMap: Record<string, QuestionBaseSchemaWithId> = {};
     
     data?.forEach((item) => {
-        if (item.display_date) {
-            questionDateMap[item.display_date] = {
+        if (item.dateAt) {
+            questionDateMap[item.dateAt] = {
                 id: item.id,
                 title: item.title, 
-                dateAt: item.display_date, 
+                dateAt: item.dateAt, 
                 subText: '',
                 article: '',
             } as QuestionBaseSchemaWithId;
@@ -59,7 +59,7 @@ export const add = async (data: QuestionBaseSchema) => {
     const { data: insertedData, error } = await supabase
         .from('question')
         .insert([{ 
-            display_date: finalDate,
+            dateAt: finalDate,
             title: data.title || "",
             subText: data.subText || "",
             needNickname: data.needNickname ?? true,
@@ -82,7 +82,7 @@ export const edit = async (id: number, data: QuestionBaseSchema) => {
     const { data: updatedData, error } = await supabase
         .from('question')
         .update({ 
-            display_date: formatToFullDate(data.dateAt),
+            dateAt: formatToFullDate(data.dateAt),
             subText: data.subText || "",
             needNickname: data.needNickname ?? true,
             needPhone: data.needPhone ?? false,
@@ -106,7 +106,7 @@ export const getList = async (dateAt: string) => {
         questionList: (data || []).map((item) => ({
             id: item.id,
             title: item.title,
-            dateAt: item.display_date,
+            dateAt: item.dateAt,
             subText: '',
             article: '',
         })) as QuestionBaseSchemaWithId[],

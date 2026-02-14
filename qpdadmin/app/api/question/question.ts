@@ -25,7 +25,7 @@ export const getQuestionMap = async (dateAt: string) => {
         if (item.display_date) {
             questionDateMap[item.display_date] = {
                 id: item.id,
-                title: item.content, 
+                title: item.title, 
                 dateAt: item.display_date, 
                 subText: '',
                 article: '',
@@ -59,7 +59,6 @@ export const add = async (data: QuestionBaseSchema) => {
     const { data: insertedData, error } = await supabase
         .from('question')
         .insert([{ 
-            content: data.title, 
             display_date: finalDate,
             title: data.title || "",
             subText: data.subText || "",
@@ -83,8 +82,6 @@ export const edit = async (id: number, data: QuestionBaseSchema) => {
     const { data: updatedData, error } = await supabase
         .from('question')
         .update({ 
-            content: data.title, 
-            // [교정] 수정할 때도 날짜 형식을 바꿉니다.
             display_date: formatToFullDate(data.dateAt),
             subText: data.subText || "",
             needNickname: data.needNickname ?? true,
@@ -108,7 +105,7 @@ export const getList = async (dateAt: string) => {
     return {
         questionList: (data || []).map((item) => ({
             id: item.id,
-            title: item.content,
+            title: item.title,
             dateAt: item.display_date,
             subText: '',
             article: '',

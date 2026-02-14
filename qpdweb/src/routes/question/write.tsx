@@ -1,230 +1,132 @@
 import * as stylex from '@stylexjs/stylex';
-import { createFileRoute, useNavigate } from '@tanstack/react-router';
-import { produce } from 'immer';
-import { ChangeEventHandler, useState } from 'react';
-import { z } from 'zod';
-import { LoginBottomSheet } from '~/shared/components/ui/bottom-sheet/login/login-bottom-sheet';
-import { Button } from '~/shared/components/ui/button/button';
-import { WarnSnackbar } from '~/shared/components/ui/snackbar/warn';
-import { AnswerNicknameStep } from '~/domain/answer/components/write/step/nickname-step';
-import { AnswerWriteStep } from '~/domain/answer/components/write/step/write-step';
+import { colors, flex, typo } from '~/shared/style/common.stylex';
+import { AnswerTimer } from '~/domain/answer/components/timer/answer-timer';
+import { Question } from '~/domain/answer/api';
 
-import useModal from '~/shared/hooks/useModal';
-import { todayQuestionInfoOptions } from '~/domain/question/hooks/today/todayQuestionOptions';
-import { useTodayQuestion } from '~/domain/question/hooks/useTodayQuestion';
-import { useUserStore } from '~/domain/user/store';
-import { useAddAnswer } from '~/domain/answer/hooks/useAddAnswer';
-import { useGlobalModalActions } from '~/shared/store/global-modal';
-import { useTodayQuestionInfo } from '~/domain/question/hooks/useTodayQuestionInfo';
-
-const Search = z.object({
-	step: z.number(),
-});
-
-export const Route = createFileRoute('/question/write')({
-	component: RouteComponent,
-	validateSearch: search => Search.parse(search),
-	loader: ({ context: { queryClient } }) =>
-		queryClient.ensureQueryData(todayQuestionInfoOptions),
-});
-
-function RouteComponent() {
-	const LoginPortal = useModal('login-portal');
-	const WarningSnackbar = useModal('answer-warning');
-	const { isLogin } = useUserStore();
-	const { step } = Route.useSearch() as { step: 1 | 2 };
-	const { data: todayQuestionInfo } = useTodayQuestionInfo();
-	const { data: questionData } = useTodayQuestion(
-		todayQuestionInfo?.questionId,
-	);
-	const { mutateAsync: addAnswer } = useAddAnswer();
-	const modalActions = useGlobalModalActions();
-
-	const navigate = useNavigate({ from: '/question/write' });
-
-	const [form, setForm] = useState({
-		text: '',
-		nickname: '',
-		phone: '',
-		isShared: true,
-	});
-
-	const onChangeTextarea: ChangeEventHandler<HTMLTextAreaElement> = e =>
-		setForm(
-			produce(draft => {
-				draft.text = e.target.value;
-			}),
-		);
-
-	const onClickWatchAlone = () => {
-		if (!isLogin) {
-			LoginPortal.open();
-			return;
-		}
-
-		setForm(
-			produce(draft => {
-				draft.isShared = !draft.isShared;
-			}),
-		);
-	};
-
-	const onChangeNickname: ChangeEventHandler<HTMLInputElement> = e =>
-		setForm(
-			produce(draft => {
-				draft.nickname = e.target.value;
-			}),
-		);
-
-	const onChangePhone: ChangeEventHandler<HTMLInputElement> = e => {
-		const value = e.target.value.replace(/[^0-9]/g, '');
-		setForm(
-			produce(draft => {
-				draft.phone = value;
-			}),
-		);
-	};
-
-	const submitAnswerAndNavigate = async () => {
-		try {
-			await addAnswer({
-				questionId: questionData?.question.id ?? 0,
-				answer: {
-					text: form.text,
-					nickname: form.nickname,
-					phone: form.phone,
-					isShared: form.isShared,
-				},
-			});
-
-			localStorage.setItem(
-				'answer',
-				JSON?.stringify({
-					question: questionData?.question,
-					text: form.text,
-					nickname: form.nickname,
-				}),
-			);
-
-			navigate({
-				to: '/question/confirm',
-			});
-		} catch (error) {
-			if (error?.name === 'HTTPError') {
-				try {
-					const errorRes = await error.response.json();
-					modalActions.alert(errorRes.message, () => navigate({ to: '/' }));
-				} catch {
-					modalActions.alert('요청 처리 중 오류가 발생했습니다.');
-				}
-			} else {
-				modalActions.alert('알 수 없는 오류가 발생했습니다.');
-			}
-		}
-	};
-
-	const handleStep1 = async () => {
-		if (!isLogin) {
-			LoginPortal.open();
-			return;
-		}
-		if (form.text.length >= 200) {
-			WarningSnackbar.open();
-			return;
-		}
-
-		if (!form.isShared) {
-			await submitAnswerAndNavigate();
-			return;
-		}
-
-		navigate({
-			search: prev => ({ ...prev, step: 2 }),
-		});
-	};
-
-	const handleStep2 = async () => {
-		if (!form.text) return;
-		if (!isLogin) {
-			LoginPortal.open();
-			return;
-		}
-		await submitAnswerAndNavigate(); // 분리된 함수 호출
-	};
-
-	const onClickConfirm = () => {
-		const stepHandlers: Record<number, () => void> = {
-			1: () => handleStep1(),
-			2: () => handleStep2(),
-		};
-		const stepNumber = step as number;
-
-		stepHandlers[stepNumber]?.();
-	};
-
-	const titleMap = {
-		1: '작성완료',
-		2: '답변 보내기',
-	} as const;
-
-	return (
-		<section {...stylex.props(styles.wrap)}>
-			{step === 1 && (
-				<AnswerWriteStep
-					onClickWatchAlone={onClickWatchAlone}
-					onChangeTextArea={onChangeTextarea}
-					question={questionData?.question}
-					answer={form.text}
-					isShared={form.isShared}
-				/>
-			)}
-
-			{step === 2 && (
-				<AnswerNicknameStep
-					onChangeNickname={onChangeNickname}
-					nickname={form.nickname}
-					needPhone={questionData?.question.needPhone}
-					phone={form.phone}
-					onChangePhone={onChangePhone}
-				/>
-			)}
-
-			<div {...stylex.props(styles.buttonWrap)}>
-				<Button
-					variants='primary'
-					disabled={!form.text}
-					onClick={onClickConfirm}>
-					{titleMap[step]}
-				</Button>
-			</div>
-
-			<LoginPortal.Render type='bottomSheet' animationType='bottomSheet'>
-				<LoginBottomSheet />
-			</LoginPortal.Render>
-
-			<WarningSnackbar.Render
-				type='snackBar'
-				animationType='upDown'
-				onClickBackground={() => {}}
-				invisibleBackground>
-				<WarnSnackbar text='200자 이내로 입력해주세요' />
-			</WarningSnackbar.Render>
-		</section>
-	);
+// [수정] Props에 question 추가 (Timer에 시간을 넘겨주기 위함)
+interface Props {
+    question: Question; 
+    value: string;
+    setValue: (value: string) => void;
+    onNext: () => void;
+    onPrev: () => void;
 }
 
+// [수정] Props에서 question 구조 분해 할당
+export const NicknameStep = ({ question, value, setValue, onNext, onPrev }: Props) => {
+    return (
+        <div {...stylex.props(flex.column, styles.container)}>
+            <div {...stylex.props(flex.column, styles.header)}>
+                {/* [수정] timeAt 속성 전달 */}
+                <AnswerTimer timeAt={question.dateAt} /> 
+                <h2 {...stylex.props(typo['Heading/H3_20∙130_SemiBold'], styles.title)}>
+                    닉네임을 입력해주세요
+                </h2>
+                <p {...stylex.props(typo['Body/Body3_14∙150_Regular'], styles.description)}>
+                    답변과 함께 보여질 닉네임이에요.
+                </p>
+            </div>
+
+            <div {...stylex.props(flex.column, styles.inputWrapper)}>
+                <input
+                    {...stylex.props(styles.input, typo['Body/Body1_16∙150_Regular'])}
+                    placeholder="닉네임 입력"
+                    value={value}
+                    onChange={(e) => setValue(e.target.value)}
+                    maxLength={10}
+                />
+                <span {...stylex.props(typo['Body/Body4_13∙150_Regular'], styles.counter)}>
+                    {value.length}/10
+                </span>
+            </div>
+
+            <div {...stylex.props(flex.row, styles.buttonGroup)}>
+                <button 
+                    onClick={onPrev}
+                    {...stylex.props(styles.prevButton, typo['Body/Body2_15∙150_Regular'])}
+                >
+                    이전
+                </button>
+                <button 
+                    onClick={onNext}
+                    disabled={!value.trim()}
+                    {...stylex.props(
+                        styles.nextButton, 
+                        !value.trim() && styles.disabled,
+                        typo['Body/Body2_15∙150_Regular']
+                    )}
+                >
+                    다음
+                </button>
+            </div>
+        </div>
+    );
+};
+
 const styles = stylex.create({
-	wrap: {
-		display: 'flex',
-		padding: '24px 18px',
-		flexDirection: 'column',
-		width: '100%',
-		height: '100%',
-		flex: 1,
-		maxWidth: 600,
-	},
-	buttonWrap: {
-		marginTop: '45px',
-		width: '100%',
-	},
+    container: {
+        height: '100%',
+        justifyContent: 'space-between',
+        paddingBottom: 20
+    },
+    header: {
+        gap: 12,
+        alignItems: 'center',
+        textAlign: 'center',
+        marginTop: 40
+    },
+    title: {
+        color: colors.gray90
+    },
+    description: {
+        color: colors.gray60
+    },
+    inputWrapper: {
+        width: '100%',
+        gap: 8
+    },
+    input: {
+        width: '100%',
+        padding: '16px 20px',
+        borderRadius: 12,
+        backgroundColor: colors.gray10,
+        border: 'none',
+        outline: 'none',
+        color: colors.gray90,
+        '::placeholder': {
+            color: colors.gray40
+        }
+    },
+    counter: {
+        alignSelf: 'flex-end',
+        color: colors.gray50
+    },
+    buttonGroup: {
+        gap: 12,
+        width: '100%'
+    },
+    prevButton: {
+        flex: 1,
+        padding: '16px',
+        borderRadius: 12,
+        backgroundColor: colors.gray20,
+        color: colors.gray60,
+        border: 'none',
+        cursor: 'pointer'
+    },
+    nextButton: {
+        flex: 2,
+        padding: '16px',
+        borderRadius: 12,
+        backgroundColor: colors.main,
+        color: '#fff',
+        border: 'none',
+        cursor: 'pointer',
+        transition: 'background-color 0.2s'
+    },
+    disabled: {
+        backgroundColor: colors.gray30,
+        color: colors.gray50,
+        cursor: 'not-allowed'
+    }
 });

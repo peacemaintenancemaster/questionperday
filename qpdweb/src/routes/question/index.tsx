@@ -29,7 +29,7 @@ function QuestionPage() {
       try {
         // 가장 최근 질문 가져오기
         const { data, error } = await supabase
-          .from('questions')
+          .from('question')
           .select('*')
           .order('created_at', { ascending: false })
           .limit(1)

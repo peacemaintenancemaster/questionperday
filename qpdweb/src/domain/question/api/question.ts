@@ -1,10 +1,9 @@
 import { supabase } from '~/lib/supabase';
 import { QuestionSchema } from '../schema';
 
-// [유틸] 한국 시간 기준 YYYY-MM-DD 문자열 구하기
+// [유틸] 한국 시간(KST) 기준 YYYY-MM-DD 구하기
 const getKSTDateString = () => {
     const now = new Date();
-    // UTC+9 (한국 시간) 보정
     const kstDate = new Date(now.getTime() + 9 * 60 * 60 * 1000);
     return kstDate.toISOString().split('T')[0];
 };
@@ -12,30 +11,34 @@ const getKSTDateString = () => {
 export const getTodayInfo = async () => {
     const todayStr = getKSTDateString();
 
-    // 1. [수정] 'questions' -> 'question' 테이블 사용
-    // 2. [수정] 오늘 날짜(dateAt)에 해당하는 질문을 찾음 (없으면 가장 최근 과거 질문)
+    // 1. [핵심 수정] 테이블명 'question'(단수) + 컬럼명 'dateAt' 사용
     const { data: question, error } = await supabase
         .from('question') 
-        .select('id, created_at, dateAt')
-        .lte('dateAt', todayStr) // 오늘 포함 과거 날짜 중
-        .order('dateAt', { ascending: false }) // 가장 최근 날짜
+        .select('*') // 모든 컬럼 가져오기 (created_at 등 포함)
+        .eq('dateAt', todayStr) // "오늘 날짜"인 질문 찾기
         .limit(1)
-        .single();
+        .maybeSingle();
 
-    if (error || !question) return { questionId: 0, timeAt: new Date().toISOString(), isAnswered: false };
+    // 에러나 데이터가 없으면 빈 값 반환 (콘솔 에러 방지)
+    if (error || !question) {
+        if (error) console.error('질문 조회 실패:', error);
+        return { questionId: 0, timeAt: new Date().toISOString(), isAnswered: false };
+    }
 
-    // 3. 마감 시간 계산 (여기서는 created_at 대신 오늘 자정 등 기획에 따라 다를 수 있으나, 일단 기존 로직 유지)
+    // 마감 시간 계산 (등록시간 + 24시간)
     const deadline = new Date(new Date(question.created_at).getTime() + 24 * 60 * 60 * 1000).toISOString();
 
     const { data: { session } } = await supabase.auth.getSession();
     let isAnswered = false;
     
     if (session?.user) {
+        // 2. [답변 체크] answer 테이블은 건드리지 않았으므로 기존 컬럼명(snake_case) 유지 예상
+        // 혹시 테이블명이 'answers'(복수)였다면 'answers'로 수정 필요. (보통 단수 'answer' 사용)
         const { count } = await supabase
-            .from('answer') // [수정] 'answers' -> 'answer'
+            .from('answer') 
             .select('*', { count: 'exact', head: true })
-            .eq('questionId', question.id) // [수정] 'question_id' -> 'questionId' (DB 컬럼명 확인 필요, 보통 camelCase로 맞추셨다면)
-            .eq('userId', session.user.id); // [수정] 'user_id' -> 'userId'
+            .eq('question_id', question.id) // 기존 컬럼명 유지
+            .eq('user_id', session.user.id); // 기존 컬럼명 유지
         
         isAnswered = !!count && count > 0;
     }
@@ -44,8 +47,12 @@ export const getTodayInfo = async () => {
 };
 
 export const getToday = async (id: number): Promise<{ question: QuestionSchema }> => {
-    // [수정] 'questions' -> 'question'
-    const { data, error } = await supabase.from('question').select('*').eq('id', id).single();
+    // 3. [상세 조회] 여기도 'question' 테이블로 변경
+    const { data, error } = await supabase
+        .from('question')
+        .select('*')
+        .eq('id', id)
+        .single();
     
     if (error || !data) throw new Error('질문을 찾을 수 없습니다.');
 
@@ -55,13 +62,13 @@ export const getToday = async (id: number): Promise<{ question: QuestionSchema }
         question: {
             ...data,
             id: data.id,
-            // [수정] DB 컬럼명(title)과 프론트 스키마(title) 매핑
-            title: data.title,       // 예전 코드: data.content
+            // 4. [매핑 수정] DB(title) -> 웹 스키마(title)
+            title: data.title,       // (기존 content -> title)
             timeAt: deadline,
-            dateAt: data.dateAt,     // 예전 코드: data.display_date
+            dateAt: data.dateAt,     // (기존 display_date -> dateAt)
             subText: data.subText || '',
             article: data.article || null,
-            // [수정] DB는 integer(1/0)일 수 있으므로 boolean으로 변환 (만약 DB가 int라면)
+            // DB 값이 integer(1/0)일 수 있으므로 boolean 변환
             needPhone: !!data.needPhone, 
             needNickname: !!data.needNickname,
             logoImageId: data.logoImageId || null,

@@ -1,7 +1,15 @@
 {
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "postinstall": "cd qpdweb && npm install",
+    "dev": "cd qpdweb && npm run dev",
+    "build": "cd qpdweb && npm run build"
+  },
   "dependencies": {
     "date-fns": "^4.1.0",
     "dayjs": "^1.11.19",
+    "immer": "^11.1.4",
     "react-calendar": "^6.0.0"
   }
 }

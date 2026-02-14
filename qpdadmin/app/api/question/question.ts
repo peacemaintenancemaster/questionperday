@@ -1,13 +1,11 @@
-// [수정] 사용자님이 알려주신 경로(app/api/supabase.ts)로 연결
 import { supabase } from '~/api/supabase';
 import type { QuestionBaseSchema } from '~/features/question/schema/question.add';
 
 const TABLE_NAME = 'question';
 
-// [안전장치] 날짜가 '26-02-14'처럼 오면 '2026-02-14'로 변환하는 함수
+// 날짜 포맷 안전장치
 const normalizeDate = (dateStr: string) => {
   if (!dateStr) return dateStr;
-  // 길이가 8자리(YY-MM-DD)이고 숫자로 시작하면 앞에 '20'을 붙임
   if (dateStr.length === 8 && /^\d{2}-/.test(dateStr)) {
     return `20${dateStr}`;
   }
@@ -15,20 +13,22 @@ const normalizeDate = (dateStr: string) => {
 };
 
 export const getQuestionList = async (dateAt: string) => {
-  // 조회할 때도 20xx 포맷으로 변환해서 조회
   const safeDate = normalizeDate(dateAt);
   
   const { data, error } = await supabase
     .from(TABLE_NAME)
     .select('*')
-    .gte('dateAt', `${safeDate} 00:00:00`)
-    .lte('dateAt', `${safeDate} 23:59:59`);
+    // [수정] gte, lte를 지우고 eq(일치)로 변경
+    // DB에 '2026-02-14'라고 저장되어 있으므로, 정확히 그 문자열과 같은지 비교해야 합니다.
+    .eq('dateAt', safeDate);
 
   if (error) {
     throw error;
   }
   return data;
 };
+
+// ... 아래는 기존 코드와 동일 ...
 
 export const getQuestion = async (id: number) => {
   const { data, error } = await supabase
@@ -44,7 +44,6 @@ export const getQuestion = async (id: number) => {
 };
 
 export const add = async (data: QuestionBaseSchema) => {
-    // 저장하기 전에 날짜 포맷 강제 변환 (26 -> 2026)
     const safeDate = normalizeDate(data.dateAt);
 
     const { data: insertedData, error } = await supabase
@@ -53,13 +52,11 @@ export const add = async (data: QuestionBaseSchema) => {
             dateAt: safeDate,
             title: data.title || "",
             subText: data.subText || "",
-            // DB 컬럼이 integer(1/0)이므로 true/false를 숫자로 변환
             needNickname: (data.needNickname ?? true) ? 1 : 0,
             needPhone: (data.needPhone ?? false) ? 1 : 0,
             logoImageId: data.logoImageId || null,
             article: data.article || null,
             timeAt: data.timeAt || null,
-            // isDel 컬럼 기본값 처리
             isDel: 0 
         }])
         .select()
@@ -73,7 +70,6 @@ export const add = async (data: QuestionBaseSchema) => {
 };
 
 export const edit = async (id: number, data: QuestionBaseSchema) => {
-    // 수정할 때도 날짜 포맷 안전하게 변환
     const safeDate = normalizeDate(data.dateAt);
 
     const { data: updatedData, error } = await supabase

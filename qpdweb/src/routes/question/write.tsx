@@ -45,6 +45,7 @@ function RouteComponent() {
 	const [form, setForm] = useState({
 		text: '',
 		nickname: '',
+		phone: '',
 		isShared: true,
 	});
 
@@ -75,6 +76,15 @@ function RouteComponent() {
 			}),
 		);
 
+	const onChangePhone: ChangeEventHandler<HTMLInputElement> = e => {
+		const value = e.target.value.replace(/[^0-9]/g, '');
+		setForm(
+			produce(draft => {
+				draft.phone = value;
+			}),
+		);
+	};
+
 	const submitAnswerAndNavigate = async () => {
 		try {
 			await addAnswer({
@@ -82,6 +92,7 @@ function RouteComponent() {
 				answer: {
 					text: form.text,
 					nickname: form.nickname,
+					phone: form.phone,
 					isShared: form.isShared,
 				},
 			});
@@ -172,6 +183,9 @@ function RouteComponent() {
 				<AnswerNicknameStep
 					onChangeNickname={onChangeNickname}
 					nickname={form.nickname}
+					needPhone={questionData?.question.needPhone}
+					phone={form.phone}
+					onChangePhone={onChangePhone}
 				/>
 			)}
 

@@ -1,7 +1,6 @@
 import { supabase } from '~/lib/supabase';
 import { QuestionSchema } from '../schema';
 
-// [유틸] 한국 시간(KST) YYYY-MM-DD
 const getKSTDateString = () => {
     const now = new Date();
     const kstDate = new Date(now.getTime() + 9 * 60 * 60 * 1000);
@@ -11,12 +10,12 @@ const getKSTDateString = () => {
 export const getTodayInfo = async () => {
     const todayStr = getKSTDateString();
 
-    // 1. [수정] created_at 제거 (DB에 없음)
-    // 2. [수정] "dateAt", "timeAt" 가져오기 (따옴표 필수)
+    // ▼▼▼ [중요 변경] created_at을 뺐고, order()도 뺐습니다! ▼▼▼
     const { data: question, error } = await supabase
-        .from('question')
-        .select('id, "dateAt", "timeAt"') 
+        .from('question') 
+        .select('id, "dateAt", "timeAt"') // created_at 없음!
         .eq('"dateAt"', todayStr) 
+        // .order() 삭제함 (created_at이 없어서 정렬하면 에러남)
         .limit(1)
         .maybeSingle();
 
@@ -29,11 +28,9 @@ export const getTodayInfo = async () => {
         return { questionId: 0, timeAt: new Date().toISOString(), isAnswered: false };
     }
 
-    // 3. [수정] 마감 시간 계산 (created_at이 없으므로 dateAt 기준)
-    // 질문 날짜(2026-02-14)의 다음 날을 마감으로 설정
-    // 만약 timeAt(시간)이 있다면 그 시간 기준 24시간 뒤로 설정할 수도 있음
-    const baseDate = new Date(question.dateAt);
-    const deadline = new Date(baseDate.getTime() + 24 * 60 * 60 * 1000).toISOString();
+    // ▼▼▼ [중요 변경] 마감 시간도 created_at 대신 dateAt(질문날짜) 기준으로 계산 ▼▼▼
+    const baseTime = new Date(question.dateAt).getTime();
+    const deadline = new Date(baseTime + 24 * 60 * 60 * 1000).toISOString();
 
     const { data: { session } } = await supabase.auth.getSession();
     let isAnswered = false;
@@ -52,7 +49,6 @@ export const getTodayInfo = async () => {
 };
 
 export const getToday = async (id: number): Promise<{ question: QuestionSchema }> => {
-    // 상세 조회
     const { data, error } = await supabase
         .from('question')
         .select('*')
@@ -61,8 +57,9 @@ export const getToday = async (id: number): Promise<{ question: QuestionSchema }
     
     if (error || !data) throw new Error('질문을 찾을 수 없습니다.');
 
-    // [수정] 여기도 created_at 대신 dateAt 사용
-    const deadline = new Date(new Date(data.dateAt).getTime() + 24 * 60 * 60 * 1000).toISOString();
+    // 여기도 dateAt 기준
+    const baseTime = new Date(data.dateAt).getTime();
+    const deadline = new Date(baseTime + 24 * 60 * 60 * 1000).toISOString();
 
     return {
         question: {

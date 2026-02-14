@@ -30,7 +30,7 @@ export const Icon = {
 	ArrowLeft: (props: Partial<Props>) => <ArrowLeft {...props} />,
 	ArrowRight: (props: Partial<Props>) => <ArrowRight {...props} />,
 	Moon: (props: Pick<Props, 'size' | 'color'>) => <Moon {...props} />,
-	Sun: (props: Pick<Props, 'size' | 'color'>) => <Sun {...props} />,
+	Sun: (props: Pick<Props, 'size' | 'color'>) => <Sun {...props} color={props.color || '#ffffff'} />,
 	Share: (props: Pick<Props, 'size' | 'color'>) => <Share {...props} />,
 	Home: (props: Pick<Props, 'size' | 'color'>) => <Home {...props} />,
 	Clock: (props: Pick<Props, 'size'>) => <Clock {...props} />,

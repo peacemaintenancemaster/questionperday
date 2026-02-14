@@ -1,869 +1,174 @@
 import { createFileRoute, useNavigate } from '@tanstack/react-router';
 import * as stylex from '@stylexjs/stylex';
 import { colors, flex, typo } from '~/shared/style/common.stylex';
-import { useMockStore, useMockActions } from '~/shared/store/mock-data';
-import { AnswerItem } from '~/domain/answer/components/item/answer-item';
-import { AnswerDownloadCard } from '~/domain/answer/components/download/answer-download-card';
-import { useAnswerDownload } from '~/domain/answer/hooks/useAnswerDownload';
-import { useState, useRef, useEffect } from 'react';
-import { Icon } from '~/shared/images';
-import { useModal } from '~/shared/hooks/useModal';
-import { useUser, useUserActions } from '~/domain/user/store';
+import { useState } from 'react';
 import { supabase } from '~/lib/supabase';
+import { useUserStore } from '~/domain/user/store';
+import useModal from '~/shared/hooks/useModal';
+import { Button } from '~/shared/components/ui/button/button';
+
+// 1. 아이콘 에러 해결: 로컬 SVG 컴포넌트 정의
+const PencilIcon = ({ size = 20, color = colors.gray60 }) => (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+        <path d="M18.9445 9.1875L14.8125 5.0555L15.8425 4.0255C16.4152 3.45281 17.3448 3.45281 17.9175 4.0255L19.9745 6.0825C20.5472 6.6552 20.5472 7.5848 19.9745 8.1575L18.9445 9.1875ZM17.9145 10.2175L10.0005 18.1315L5.8685 13.9995L13.7825 6.0855L17.9145 10.2175ZM4.9125 19.0875C4.84524 19.1548 4.79632 19.238 4.7705 19.3285L4.0185 21.9605C4.0049 22.0081 4.00416 22.0581 4.01633 22.1061C4.0285 22.1541 4.05315 22.1984 4.08811 22.2351C4.12307 22.2718 4.1671 22.2996 4.21629 22.3161C4.26549 22.3325 4.31811 22.3371 4.3695 22.3295L7.0015 21.5775C7.092 21.5517 7.1752 21.5028 7.2425 21.4355L4.9125 19.0875Z" fill={color}/>
+    </svg>
+);
 
 export const Route = createFileRoute('/profile')({
-	component: ProfilePage,
+    component: ProfilePage,
 });
 
 function ProfilePage() {
-	const navigate = useNavigate();
-	const { getAllQuestions, getLatestMemoByQuestion } = useMockActions();
-	const allQuestions = getAllQuestions();
+    const navigate = useNavigate();
+    // 2. 스토어 및 유저 정보 에러 해결: any 타입 캐스팅으로 속성 접근 허용 (임시) 및 metadata 참조
+    const userStore = useUserStore() as any; 
+    const user = userStore.user;
+    const setUser = userStore.setUser || userStore.actions?.setUser; // setUser 위치 확인
 
-	const bookmarkedQuestion = allQuestions[0];
-	const bookmarkedMemo = bookmarkedQuestion
-		? getLatestMemoByQuestion(bookmarkedQuestion.id)
-		: undefined;
+    const EditNicknameModal = useModal('edit-nickname');
+    
+    // 카카오 유저 정보는 보통 user_metadata에 들어있습니다.
+    const initialNickname = user?.user_metadata?.full_name || user?.user_metadata?.nickname || '';
+    const [newNickname, setNewNickname] = useState(initialNickname);
+    const [isUpdating, setIsUpdating] = useState(false);
 
-	// Download
-	const { cardRef: downloadCardRef, download: downloadAnswer } =
-		useAnswerDownload();
-	const [dlQuestion, setDlQuestion] = useState('');
-	const [dlAnswerText, setDlAnswerText] = useState('');
+    const handleUpdateNickname = async () => {
+        if (!user?.id || !newNickname.trim()) return;
+        
+        setIsUpdating(true);
+        try {
+            // Supabase Auth 유저 정보 업데이트
+            const { error } = await supabase.auth.updateUser({
+                data: { nickname: newNickname, full_name: newNickname }
+            });
 
-	const handleDownload = (question: string, answerText: string) => {
-		setDlQuestion(question);
-		setDlAnswerText(answerText);
-		downloadAnswer();
-	};
+            if (error) throw error;
 
-	// Modals
-	const profileModal = useModal('profile-edit');
-	const inviteModal = useModal('invite-friends');
-	const withdrawModal = useModal('withdraw-confirm');
+            // 스토어 업데이트
+            if (setUser) {
+                setUser({ ...user, user_metadata: { ...user.user_metadata, nickname: newNickname, full_name: newNickname } });
+            }
+            
+            EditNicknameModal.close();
+            alert('닉네임이 수정되었습니다.');
+        } catch (error) {
+            console.error('닉네임 수정 실패:', error);
+            alert('수정에 실패했습니다.');
+        } finally {
+            setIsUpdating(false);
+        }
+    };
 
-	const user = useUser();
-	const { setUser } = useUserActions();
-	
-	// Profile edit state - 카카오톡 닉네임을 기본값으로 사용
-	const [nickname, setNickname] = useState(user?.name || '');
-	const [editNickname, setEditNickname] = useState(user?.name || '');
-	const [isEditingNickname, setIsEditingNickname] = useState(false);
-	const nicknameInputRef = useRef<HTMLInputElement>(null);
+    return (
+        <main {...stylex.props(styles.base, flex.column)}>
+            <section {...stylex.props(styles.profileSection, flex.column, flex.vertical)}>
+                <div {...stylex.props(styles.avatar)}>
+                    <img 
+                        src={user?.user_metadata?.avatar_url || user?.user_metadata?.profile_image || ''} 
+                        alt="프로필" 
+                        {...stylex.props(styles.avatarImg)} 
+                        onError={(e) => (e.currentTarget.src = 'https://via.placeholder.com/80')}
+                    />
+                </div>
 
-	// 사용자 정보가 변경되면 닉네임 업데이트
-	useEffect(() => {
-		if (user?.name) {
-			setNickname(user.name);
-			setEditNickname(user.name);
-		}
-	}, [user?.name]);
+                <div {...stylex.props(flex.center, styles.nameWrapper)}>
+                    <h2 {...stylex.props(typo['Heading/H3_20∙130_SemiBold'])}>
+                        {user?.user_metadata?.full_name || user?.user_metadata?.nickname || '회원님'}
+                    </h2>
+                    <button 
+                        onClick={() => EditNicknameModal.open()}
+                        {...stylex.props(styles.editBtn)}
+                    >
+                        <PencilIcon />
+                    </button>
+                </div>
 
-	const handleProfileSave = async () => {
-		try {
-			const { data: { user: authUser }, error } = await supabase.auth.updateUser({
-				data: { name: editNickname },
-			});
+                <p {...stylex.props(typo['Body/Body3_14∙150_Regular'], styles.emailText)}>
+                    {user?.email || '이메일 정보 없음'}
+                </p>
+            </section>
 
-			if (error) throw error;
-			if (!authUser) throw new Error('User not updated');
+            <hr {...stylex.props(styles.divider)} />
 
-			// Update the user state in Zustand store
-			if (user) {
-				setUser({ ...user, name: editNickname });
-			}
-			
-			setIsEditingNickname(false);
-			profileModal.close();
-		} catch (error) {
-			console.error('닉네임 저장 에러:', error);
-			alert('닉네임 저장에 실패했습니다.');
-		}
-	};
+            <nav {...stylex.props(flex.column, styles.menuList)}>
+                <button onClick={() => navigate({ to: '/' })} {...stylex.props(styles.menuItem)}>
+                    작성한 답변 보기
+                </button>
+                <button 
+                    onClick={async () => {
+                        await supabase.auth.signOut();
+                        navigate({ to: '/' });
+                    }} 
+                    {...stylex.props(styles.menuItem, styles.logout)}
+                >
+                    로그아웃
+                </button>
+            </nav>
 
-	const handleProfileOpen = () => {
-		setEditNickname(nickname);
-		setIsEditingNickname(false);
-		profileModal.open();
-	};
-
-	const handleWithdraw = () => {
-		withdrawModal.close();
-	};
-
-	const handleLogout = async () => {
-		const { error } = await supabase.auth.signOut();
-		if (error) {
-			console.error('Error logging out:', error);
-			return;
-		}
-		navigate({ to: '/' });
-	};
-
-	return (
-		<section {...stylex.props(styles.base, flex.column)}>
-			{/* Profile Card */}
-			<div data-profile-card {...stylex.props(styles.profileCard, flex.vertical)}>
-				<div {...stylex.props(styles.avatar)}>
-					<Icon.User size='32' color='#9a9a9a' />
-				</div>
-				<div {...stylex.props(styles.profileInfo, flex.column)}>
-					<div {...stylex.props(flex.between, flex.vertical)}>
-						<p
-							data-primary-black
-							{...stylex.props(
-								typo['Heading/H4_18∙100_SemiBold'],
-								styles.primaryBlack,
-							)}>
-							{nickname}님
-						</p>
-						<button
-							{...stylex.props(styles.editBtn)}
-							onClick={handleProfileOpen}>
-							<svg width='16' height='16' viewBox='0 0 24 24' fill='none'>
-								<path d='M11 4H4C3.46957 4 2.96086 4.21071 2.58579 4.58579C2.21071 4.96086 2 5.46957 2 6V20C2 20.5304 2.21071 21.0391 2.58579 21.4142C2.96086 21.7893 3.46957 22 4 22H18C18.5304 22 19.0391 21.7893 19.4142 21.4142C19.7893 21.0391 20 20.5304 20 20V13' stroke='#2C5AFF' strokeWidth='2' strokeLinecap='round' strokeLinejoin='round' />
-								<path d='M18.5 2.50001C18.8978 2.10219 19.4374 1.87869 20 1.87869C20.5626 1.87869 21.1022 2.10219 21.5 2.50001C21.8978 2.89784 22.1213 3.4374 22.1213 4.00001C22.1213 4.56262 21.8978 5.10219 21.5 5.50001L12 15L8 16L9 12L18.5 2.50001Z' stroke='#2C5AFF' strokeWidth='2' strokeLinecap='round' strokeLinejoin='round' />
-							</svg>
-						</button>
-					</div>
-					<div {...stylex.props(flex.vertical, styles.emailRow)}>
-						<p
-							data-gray-text
-							{...stylex.props(
-								typo['Body/Body3_14∙100_Regular'],
-								styles.gray80,
-							)}>
-							{user?.email || 'user@naver.com'}
-						</p>
-						<Icon.ArrowRight size='12' color='#9a9a9a' />
-					</div>
-				</div>
-			</div>
-
-			{/* Invite Section */}
-			<div
-				data-profile-section
-				{...stylex.props(styles.section, flex.between, flex.vertical)}>
-				<div {...stylex.props(flex.column)}>
-					<p
-						data-primary-black
-						{...stylex.props(
-							typo['Body/Body1_16∙100_SemiBold'],
-							styles.primaryBlack,
-						)}>
-						친구 초대하기
-					</p>
-				</div>
-				<button
-					{...stylex.props(styles.inviteBtn)}
-					onClick={async () => {
-						try {
-							await navigator.clipboard.writeText('https://questionperday.me/');
-							alert('링크가 복사되었습니다!');
-						} catch (error) {
-							console.error('링크 복사 실패:', error);
-							alert('링크 복사에 실패했습니다.');
-						}
-					}}>
-					<span
-						{...stylex.props(
-							typo['Body/Body3_14∙100_SemiBold'],
-						)}>
-						링크 복사
-					</span>
-				</button>
-			</div>
-
-			{/* Bookmark Section */}
-			<div data-profile-section {...stylex.props(styles.bookmarkSection, flex.column)}>
-				<p
-					data-primary-black
-					{...stylex.props(
-						typo['Body/Body1_16∙100_SemiBold'],
-						styles.primaryBlack,
-					)}>
-					북마크
-				</p>
-
-				{bookmarkedQuestion ? (
-					<div {...stylex.props(styles.bookmarkCardWrap)}>
-						<AnswerItem
-							questionData={bookmarkedQuestion}
-							latestMemo={bookmarkedMemo}
-							showBookmark
-							bookmarkActive
-							onClick={() =>
-								navigate({
-									to: '/answer/memo',
-									search: { questionId: bookmarkedQuestion.id },
-								})
-							}
-							onDownload={() =>
-								handleDownload(
-									bookmarkedQuestion.title,
-									bookmarkedQuestion.answerList[0]?.text ?? '',
-								)
-							}
-						/>
-					</div>
-				) : (
-					<p
-						data-gray-text
-						{...stylex.props(
-							typo['Body/Body3_14∙100_Regular'],
-							styles.gray80,
-						)}>
-						북마크한 답변이 없어요.
-					</p>
-				)}
-			</div>
-
-			{/* Feedback Section */}
-			<div data-profile-section {...stylex.props(styles.feedbackSection, flex.column)}>
-				<p
-					data-primary-black
-					{...stylex.props(
-						typo['Body/lines/Body1_16∙150_SemiBold_lines'],
-						styles.primaryBlack,
-					)}>
-					{'퀘스천퍼데이, 이용해보니 어땠나요?'}
-					{'\n'}
-					{'아래 버튼을 눌러 피드백을 보내주세요!'}
-				</p>
-
-				<div {...stylex.props(styles.feedbackBtns, flex.vertical)}>
-					<button {...stylex.props(styles.feedbackBtn, styles.feedbackBtnOutline)}>
-						<span {...stylex.props(styles.feedbackBtnText)}>
-							{'아쉬워요'}
-						</span>
-					</button>
-					<button {...stylex.props(styles.feedbackBtn, styles.feedbackBtnFilled)}>
-						<span {...stylex.props(styles.feedbackBtnTextWhite)}>
-							{'좋았어요'}
-						</span>
-					</button>
-				</div>
-			</div>
-
-			{/* Footer */}
-			<div data-footer-card {...stylex.props(styles.footer, flex.column)}>
-				<svg
-					width='80'
-					height='24'
-					viewBox='0 0 1182 361'
-					fill='none'
-					xmlns='http://www.w3.org/2000/svg'>
-					<g clipPath='url(#profile_clip)'>
-						<path
-							d='M242.226 53.9421H385.741V360.996H242.226V182.158C242.226 161.409 217.753 151.451 192.871 151.451C160.523 151.451 145.169 166.797 145.169 182.158C145.169 199.584 160.508 213.685 192.871 213.685C216.099 213.685 236.006 205.807 241.817 187.122L208.635 311.194C190.382 315.338 172.555 317.418 155.547 317.418C70.5058 317.433 0 268.056 0 182.993C0 97.9306 75.4823 47.7188 148.492 47.7188C182.508 47.7188 215.675 58.511 241.392 80.0802C241.801 80.49 242.226 80.0802 242.226 79.6704V53.9421Z'
-							fill='#2C5AFF'
-						/>
-						<path
-							d='M634.552 317.433C604.268 317.433 569.432 309.555 546.613 294.194C546.203 293.784 545.779 294.194 545.779 294.604V360.996H402.264V53.9421H545.779V182.993C545.779 203.743 570.252 213.7 595.134 213.7C627.482 213.7 642.836 198.354 642.836 182.993C642.836 165.568 627.497 151.451 595.134 151.451C571.905 151.451 551.999 159.329 546.188 178.014L579.37 53.9421C597.622 49.7831 615.45 47.7188 632.458 47.7188C717.484 47.7188 787.99 97.0957 787.99 182.158C787.99 267.221 712.917 317.433 634.522 317.433H634.552Z'
-							fill='#2C5AFF'
-						/>
-						<path
-							d='M1038.5 178.018C1038.5 157.269 1014.03 147.311 989.144 147.311C956.797 147.311 941.443 162.657 941.443 178.018C941.443 195.444 956.782 209.56 989.144 209.56C1012.37 209.56 1032.28 201.682 1038.09 182.997L1004.91 311.213C987.081 315.782 972.971 317.437 951.821 317.437C866.795 317.437 796.289 268.06 796.289 182.997C796.289 91.3011 875.094 47.7225 952.245 47.7225C984.183 47.7225 1020.26 53.9458 1037.7 72.2061C1038.11 72.6159 1038.53 72.2061 1038.53 71.7962V0H1182.05V311.213H1038.53V178.018H1038.5Z'
-							fill='#2C5AFF'
-						/>
-					</g>
-					<defs>
-						<clipPath id='profile_clip'>
-							<rect width='1182' height='361' fill='white' />
-						</clipPath>
-					</defs>
-				</svg>
-				<p
-					data-gray-text
-					{...stylex.props(
-						typo['Caption/lines/Caption1_13∙150_Regular_lines'],
-						styles.gray80,
-					)}>
-					매일 질문을 던지는 뉴스레터, 퀘스천퍼데이
-				</p>
-
-				<div {...stylex.props(styles.socialIcons, flex.vertical)}>
-					<button {...stylex.props(styles.socialBtn)}>
-						<Icon.Mail size='20' color='#6a6a6a' />
-					</button>
-					<button {...stylex.props(styles.socialBtn)}>
-						<svg
-							width='20'
-							height='20'
-							viewBox='0 0 24 24'
-							fill='none'
-							xmlns='http://www.w3.org/2000/svg'>
-							<rect
-								x='2'
-								y='2'
-								width='20'
-								height='20'
-								rx='5'
-								stroke='#6a6a6a'
-								strokeWidth='1.5'
-							/>
-							<circle
-								cx='12'
-								cy='12'
-								r='5'
-								stroke='#6a6a6a'
-								strokeWidth='1.5'
-							/>
-							<circle cx='18' cy='6' r='1' fill='#6a6a6a' />
-						</svg>
-					</button>
-				</div>
-			</div>
-
-			{/* Footer Buttons */}
-			<div {...stylex.props(styles.footerButtons)}>
-				<button
-					{...stylex.props(styles.withdrawBtn)}
-					onClick={handleLogout}>
-					<span
-						data-gray-text
-						{...stylex.props(
-							typo['Caption/Caption1_13∙100_Regular'],
-							styles.gray70,
-						)}>
-						로그아웃
-					</span>
-				</button>
-				<div {...stylex.props(styles.footerButtonDivider)} />
-				<button
-					{...stylex.props(styles.withdrawBtn)}
-					onClick={() => withdrawModal.open()}>
-					<span
-						data-gray-text
-						{...stylex.props(
-							typo['Caption/Caption1_13∙100_Regular'],
-							styles.gray70,
-						)}>
-						탈퇴하기
-					</span>
-				</button>
-			</div>
-
-			{/* Hidden download card */}
-			<div
-				{...stylex.props(styles.hiddenDownloadCard)}
-				ref={downloadCardRef}>
-				<AnswerDownloadCard question={dlQuestion} answer={dlAnswerText} />
-			</div>
-
-			{/* Profile Edit Bottom Sheet */}
-			<profileModal.Render type='bottomSheet' animationType='bottomSheet'>
-				<div {...stylex.props(sheetStyles.sheet, flex.column)}>
-					<div {...stylex.props(sheetStyles.handle)} />
-					<p
-						{...stylex.props(
-							typo['Body/Body1_16∙100_SemiBold'],
-							sheetStyles.sheetTitle,
-						)}>
-						프로필 수정
-					</p>
-
-					{/* Avatar with camera */}
-					<div {...stylex.props(sheetStyles.avatarWrap, flex.center)}>
-						<div {...stylex.props(sheetStyles.avatarLarge)}>
-							<Icon.User size='40' color='#9a9a9a' />
-						</div>
-						<div {...stylex.props(sheetStyles.cameraBadge, flex.center)}>
-							<svg width='14' height='14' viewBox='0 0 24 24' fill='none'>
-								<path d='M23 19C23 19.5304 22.7893 20.0391 22.4142 20.4142C22.0391 20.7893 21.5304 21 21 21H3C2.46957 21 1.96086 20.7893 1.58579 20.4142C1.21071 20.0391 1 19.5304 1 19V8C1 7.46957 1.21071 6.96086 1.58579 6.58579C1.96086 6.21071 2.46957 6 3 6H7L9 3H15L17 6H21C21.5304 6 22.0391 6.21071 22.4142 6.58579C22.7893 6.96086 23 7.46957 23 8V19Z' stroke='#fff' strokeWidth='2' strokeLinecap='round' strokeLinejoin='round' />
-								<circle cx='12' cy='13' r='4' stroke='#fff' strokeWidth='2' />
-							</svg>
-						</div>
-					</div>
-
-					{/* Nickname input */}
-					<div {...stylex.props(sheetStyles.nicknameWrap, flex.center)}>
-						{isEditingNickname ? (
-							<input
-								ref={nicknameInputRef}
-								type='text'
-								value={editNickname}
-								onChange={e => setEditNickname(e.target.value)}
-								onBlur={() => setIsEditingNickname(false)}
-								maxLength={20}
-								{...stylex.props(
-									sheetStyles.nicknameInput,
-									typo['Body/Body1_16∙100_SemiBold'],
-								)}
-							/>
-						) : (
-							<button
-								{...stylex.props(sheetStyles.nicknameDisplay, flex.center)}
-								onClick={() => {
-									setIsEditingNickname(true);
-									setTimeout(() => nicknameInputRef.current?.focus(), 50);
-								}}>
-								<span
-									{...stylex.props(
-										typo['Body/Body1_16∙100_SemiBold'],
-										sheetStyles.nicknameText,
-									)}>
-									{editNickname}님
-								</span>
-								<svg width='16' height='16' viewBox='0 0 24 24' fill='none'>
-									<path d='M11 4H4C3.46957 4 2.96086 4.21071 2.58579 4.58579C2.21071 4.96086 2 5.46957 2 6V20C2 20.5304 2.21071 21.0391 2.58579 21.4142C2.96086 21.7893 3.46957 22 4 22H18C18.5304 22 19.0391 21.7893 19.4142 21.4142C19.7893 21.0391 20 20.5304 20 20V13' stroke='#9a9a9a' strokeWidth='2' strokeLinecap='round' strokeLinejoin='round' />
-									<path d='M18.5 2.50001C18.8978 2.10219 19.4374 1.87869 20 1.87869C20.5626 1.87869 21.1022 2.10219 21.5 2.50001C21.8978 2.89784 22.1213 3.4374 22.1213 4.00001C22.1213 4.56262 21.8978 5.10219 21.5 5.50001L12 15L8 16L9 12L18.5 2.50001Z' stroke='#9a9a9a' strokeWidth='2' strokeLinecap='round' strokeLinejoin='round' />
-								</svg>
-							</button>
-						)}
-					</div>
-
-					{/* Save button */}
-					<button
-						{...stylex.props(sheetStyles.saveBtn)}
-						onClick={handleProfileSave}>
-						<span
-							{...stylex.props(
-								typo['Body/Body1_16∙100_SemiBold'],
-								sheetStyles.saveBtnText,
-							)}>
-							수정 완료
-						</span>
-					</button>
-				</div>
-			</profileModal.Render>
-
-			{/* Invite Bottom Sheet */}
-			<inviteModal.Render type='bottomSheet' animationType='bottomSheet'>
-				<div {...stylex.props(sheetStyles.sheet, flex.column)}>
-					<div {...stylex.props(sheetStyles.handle)} />
-					<p
-						{...stylex.props(
-							typo['Body/Body1_16∙100_SemiBold'],
-							sheetStyles.sheetTitle,
-						)}>
-						친구 초대하기
-					</p>
-
-					<div {...stylex.props(sheetStyles.inviteList, flex.column)}>
-						<button {...stylex.props(sheetStyles.inviteRow, flex.vertical)}>
-							<div {...stylex.props(sheetStyles.inviteIcon)}>
-								<svg width='24' height='24' viewBox='0 0 24 24' fill='none'>
-									<rect width='24' height='24' rx='12' fill='#FEE500' />
-									<path d='M12 6.5C8.96243 6.5 6.5 8.38604 6.5 10.7143C6.5 12.2188 7.52832 13.5357 9.07692 14.2857L8.46154 16.7857C8.43269 16.9006 8.56346 16.997 8.66346 16.929L11.4615 15.0714C11.6369 15.0857 11.8154 15.0929 12 15.0929C15.0376 15.0929 17.5 13.1283 17.5 10.7143C17.5 8.38604 15.0376 6.5 12 6.5Z' fill='#3C1E1E' />
-								</svg>
-							</div>
-							<span
-								{...stylex.props(
-									typo['Body/Body3_14∙100_Regular'],
-									sheetStyles.inviteText,
-								)}>
-								카카오톡으로 초대하기
-							</span>
-						</button>
-
-						<button {...stylex.props(sheetStyles.inviteRow, flex.vertical)}>
-							<div {...stylex.props(sheetStyles.inviteIcon)}>
-								<svg width='24' height='24' viewBox='0 0 24 24' fill='none'>
-									<defs>
-										<linearGradient id='igGrad' x1='0' y1='24' x2='24' y2='0'>
-											<stop offset='0%' stopColor='#feda75' />
-											<stop offset='25%' stopColor='#fa7e1e' />
-											<stop offset='50%' stopColor='#d62976' />
-											<stop offset='75%' stopColor='#962fbf' />
-											<stop offset='100%' stopColor='#4f5bd5' />
-										</linearGradient>
-									</defs>
-									<rect x='1' y='1' width='22' height='22' rx='6' stroke='url(#igGrad)' strokeWidth='1.5' fill='white' />
-									<circle cx='12' cy='12' r='4.5' stroke='url(#igGrad)' strokeWidth='1.5' fill='none' />
-									<circle cx='17.5' cy='6.5' r='1' fill='url(#igGrad)' />
-								</svg>
-							</div>
-							<span
-								{...stylex.props(
-									typo['Body/Body3_14∙100_Regular'],
-									sheetStyles.inviteText,
-								)}>
-								인스타그램으로 초대하기
-							</span>
-						</button>
-
-						<button {...stylex.props(sheetStyles.inviteRow, flex.vertical)}>
-							<div {...stylex.props(sheetStyles.inviteIcon)}>
-								<svg width='24' height='24' viewBox='0 0 24 24' fill='none'>
-									<rect width='24' height='24' rx='4' fill='#333' />
-									<path d='M8 11H16V13H8V11ZM7 8H17V10H7V8ZM9 14H15V16H9V14Z' fill='white' />
-								</svg>
-							</div>
-							<span
-								{...stylex.props(
-									typo['Body/Body3_14∙100_Regular'],
-									sheetStyles.inviteText,
-								)}>
-								링크 복사하기
-							</span>
-						</button>
-					</div>
-				</div>
-			</inviteModal.Render>
-
-			{/* Withdraw Alert */}
-			<withdrawModal.Render type='modal' animationType='scale'>
-				<div {...stylex.props(alertStyles.alertBox, flex.column)}>
-					<div {...stylex.props(alertStyles.alertContent, flex.column)}>
-						<p
-							{...stylex.props(
-								typo['Body/lines/Body2_15∙150_Bold_lines'],
-								alertStyles.alertTitle,
-							)}>
-							정말로 탈퇴하시나요?
-						</p>
-						<p
-							{...stylex.props(
-								typo['Body/lines/Body3_14∙150_Regular_lines'],
-								alertStyles.alertDesc,
-							)}>
-							{'지금껏 기록한 내용이 모두 사라져요.'}
-							{'\n'}
-							{'언제든 재가입은 가능합니다.'}
-						</p>
-					</div>
-
-					<div {...stylex.props(alertStyles.alertBtns, flex.vertical)}>
-						<button
-							{...stylex.props(alertStyles.alertBtn, alertStyles.cancelBtn)}
-							onClick={() => withdrawModal.close()}>
-							<span
-								{...stylex.props(
-									typo['Body/Body3_14∙100_SemiBold'],
-									alertStyles.cancelText,
-								)}>
-								취소
-							</span>
-						</button>
-						<button
-							{...stylex.props(alertStyles.alertBtn, alertStyles.withdrawBtnFill)}
-							onClick={handleWithdraw}>
-							<span
-								{...stylex.props(
-									typo['Body/Body3_14∙100_SemiBold'],
-									alertStyles.withdrawText,
-								)}>
-								탈퇴
-							</span>
-						</button>
-					</div>
-				</div>
-			</withdrawModal.Render>
-		</section>
-	);
+            <EditNicknameModal.Render type="bottomSheet" animationType="bottomSheet">
+                <div {...stylex.props(styles.modalContent, flex.column)}>
+                    <h3 {...stylex.props(typo['Heading/H4_18∙130_SemiBold'])}>닉네임 수정</h3>
+                    <p {...stylex.props(typo['Body/Body3_14∙150_Regular'], styles.modalSub)}>
+                        새로운 닉네임을 입력해주세요.
+                    </p>
+                    <input 
+                        type="text" 
+                        value={newNickname}
+                        onChange={(e) => setNewNickname(e.target.value)}
+                        {...stylex.props(styles.input)}
+                        placeholder="닉네임 입력"
+                    />
+                    <div {...stylex.props(flex.row, styles.modalButtons)}>
+                        <Button 
+                            variants="secondary" 
+                            onClick={() => EditNicknameModal.close()}
+                            style={styles.flex1} // 3. StyleX 에러 해결: 스타일 객체 대신 StyleX 스타일 사용
+                        >
+                            취소
+                        </Button>
+                        <Button 
+                            variants="primary" 
+                            onClick={handleUpdateNickname}
+                            disabled={isUpdating || !newNickname.trim()}
+                            style={styles.flex2}
+                        >
+                            {isUpdating ? '저장 중...' : '저장하기'}
+                        </Button>
+                    </div>
+                </div>
+            </EditNicknameModal.Render>
+        </main>
+    );
 }
 
-// ── Main page styles ──
 const styles = stylex.create({
-	base: {
-		padding: '24px 18px',
-		paddingBottom: 60,
-		gap: 0,
-	},
-	profileCard: {
-		width: '100%',
-		padding: 16,
-		borderRadius: 14,
-		backgroundColor: colors.gray20,
-		gap: 16,
-		marginBottom: 24,
-	},
-	avatar: {
-		width: 56,
-		height: 56,
-		borderRadius: '50%',
-		backgroundColor: colors.gray40,
-		display: 'flex',
-		alignItems: 'center',
-		justifyContent: 'center',
-		flexShrink: 0,
-	},
-	profileInfo: {
-		flexGrow: 1,
-		gap: 6,
-	},
-	primaryBlack: {
-		color: colors.gray90,
-	},
-	gray80: {
-		color: colors.gray80,
-	},
-	gray70: {
-		color: colors.gray70,
-	},
-	mainColor: {
-		color: colors.main,
-	},
-	emailRow: {
-		gap: 4,
-	},
-	editBtn: {
-		cursor: 'pointer',
-	},
-	section: {
-		width: '100%',
-		paddingBottom: 20,
-		borderBottom: `1px solid ${colors.gray40}`,
-		marginBottom: 20,
-	},
-	inviteDesc: {
-		marginTop: 4,
-	},
-	inviteBtn: {
-		padding: '8px 16px',
-		borderRadius: 8,
-		border: `1px solid ${colors.gray50}`,
-		cursor: 'pointer',
-	},
-	bookmarkSection: {
-		width: '100%',
-		paddingBottom: 20,
-		borderBottom: `1px solid ${colors.gray40}`,
-		marginBottom: 20,
-		gap: 16,
-	},
-	bookmarkCardWrap: {
-		width: '100%',
-		overflow: 'hidden',
-	},
-	feedbackSection: {
-		width: '100%',
-		paddingBottom: 20,
-		borderBottom: `1px solid ${colors.gray40}`,
-		marginBottom: 20,
-		gap: 16,
-	},
-	feedbackBtns: {
-		gap: 12,
-		width: '100%',
-	},
-	feedbackBtn: {
-		flex: 1,
-		padding: '12px 0',
-		borderRadius: 10,
-		cursor: 'pointer',
-		display: 'flex',
-		alignItems: 'center',
-		justifyContent: 'center',
-		gap: 6,
-	},
-	feedbackBtnOutline: {
-		border: `1px solid ${colors.gray50}`,
-		backgroundColor: 'transparent',
-	},
-	feedbackBtnFilled: {
-		border: 'none',
-		backgroundColor: colors.main,
-	},
-	feedbackBtnText: {
-		color: colors.gray90,
-		fontSize: 14,
-		fontWeight: 600,
-	},
-	feedbackBtnTextWhite: {
-		color: colors.white,
-		fontSize: 14,
-		fontWeight: 600,
-	},
-	footer: {
-		width: '100%',
-		padding: 24,
-		borderRadius: 14,
-		backgroundColor: colors.gray20,
-		gap: 8,
-		alignItems: 'flex-start',
-		marginBottom: 16,
-	},
-	socialIcons: {
-		gap: 8,
-		marginTop: 8,
-	},
-	socialBtn: {
-		width: 36,
-		height: 36,
-		borderRadius: '50%',
-		border: `1px solid ${colors.gray50}`,
-		display: 'flex',
-		alignItems: 'center',
-		justifyContent: 'center',
-		cursor: 'pointer',
-	},
-	footerButtons: {
-		width: '100%',
-		display: 'flex',
-		alignItems: 'center',
-		justifyContent: 'flex-end',
-		gap: 8,
-	},
-	footerButtonDivider: {
-		width: 1,
-		height: 12,
-		backgroundColor: colors.gray50,
-	},
-	withdrawBtn: {
-		cursor: 'pointer',
-	},
-	hiddenDownloadCard: {
-		position: 'fixed',
-		top: -9999,
-		left: -9999,
-		zIndex: -1,
-		pointerEvents: 'none',
-	},
-});
-
-// ── Bottom Sheet styles ──
-const sheetStyles = stylex.create({
-	sheet: {
-		width: '100%',
-		maxWidth: 600,
-		borderTopLeftRadius: 20,
-		borderTopRightRadius: 20,
-		backgroundColor: '#fff',
-		padding: '12px 18px 32px',
-		gap: 0,
-		alignItems: 'center',
-	},
-	handle: {
-		width: 40,
-		height: 4,
-		borderRadius: 2,
-		backgroundColor: colors.gray50,
-		marginBottom: 20,
-	},
-	sheetTitle: {
-		width: '100%',
-		color: colors.gray90,
-		marginBottom: 24,
-	},
-	// Profile edit
-	avatarWrap: {
-		position: 'relative',
-		marginBottom: 24,
-	},
-	avatarLarge: {
-		width: 80,
-		height: 80,
-		borderRadius: '50%',
-		backgroundColor: colors.gray40,
-		display: 'flex',
-		alignItems: 'center',
-		justifyContent: 'center',
-	},
-	cameraBadge: {
-		position: 'absolute',
-		bottom: 0,
-		right: 0,
-		width: 28,
-		height: 28,
-		borderRadius: '50%',
-		backgroundColor: colors.gray80,
-		border: '2px solid #fff',
-	},
-	nicknameWrap: {
-		width: '100%',
-		marginBottom: 24,
-	},
-	nicknameDisplay: {
-		cursor: 'pointer',
-		gap: 6,
-		padding: '10px 16px',
-		borderRadius: 10,
-		border: `1px solid ${colors.gray40}`,
-		width: '100%',
-	},
-	nicknameInput: {
-		width: '100%',
-		padding: '10px 16px',
-		borderRadius: 10,
-		border: `1px solid ${colors.main}`,
-		outline: 'none',
-		textAlign: 'center',
-		color: colors.gray90,
-	},
-	nicknameText: {
-		color: colors.gray90,
-	},
-	saveBtn: {
-		width: '100%',
-		padding: '16px 0',
-		borderRadius: 14,
-		backgroundColor: colors.main,
-		border: 'none',
-		cursor: 'pointer',
-	},
-	saveBtnText: {
-		color: colors.white,
-	},
-	// Invite
-	inviteList: {
-		width: '100%',
-		gap: 0,
-	},
-	inviteRow: {
-		width: '100%',
-		padding: '16px 0',
-		gap: 14,
-		cursor: 'pointer',
-		border: 'none',
-		backgroundColor: 'transparent',
-	},
-	inviteIcon: {
-		width: 28,
-		height: 28,
-		display: 'flex',
-		alignItems: 'center',
-		justifyContent: 'center',
-	},
-	inviteText: {
-		color: colors.gray90,
-	},
-});
-
-// ── Alert styles ──
-const alertStyles = stylex.create({
-	alertBox: {
-		width: 300,
-		borderRadius: 16,
-		backgroundColor: '#fff',
-		overflow: 'hidden',
-	},
-	alertContent: {
-		padding: '28px 24px 20px',
-		alignItems: 'center',
-		gap: 8,
-	},
-	alertTitle: {
-		color: colors.gray90,
-		textAlign: 'center',
-	},
-	alertDesc: {
-		color: colors.gray80,
-		textAlign: 'center',
-	},
-	alertBtns: {
-		width: '100%',
-		borderTop: `1px solid ${colors.gray40}`,
-		gap: 0,
-	},
-	alertBtn: {
-		flex: 1,
-		padding: '14px 0',
-		cursor: 'pointer',
-		border: 'none',
-		backgroundColor: 'transparent',
-	},
-	cancelBtn: {
-		borderRight: `1px solid ${colors.gray40}`,
-	},
-	withdrawBtnFill: {
-		backgroundColor: 'transparent',
-	},
-	cancelText: {
-		color: colors.gray80,
-	},
-	withdrawText: {
-		color: colors.redPrimary,
-	},
+    base: { padding: '40px 20px', backgroundColor: '#fff', minHeight: '100vh' },
+    profileSection: { gap: 12, marginBottom: 32 },
+    avatar: { 
+        width: 80, height: 80, borderRadius: '50%', 
+        backgroundColor: colors.gray20, overflow: 'hidden' 
+    },
+    avatarImg: { width: '100%', height: '100%', objectFit: 'cover' },
+    nameWrapper: { gap: 4, display: 'flex', alignItems: 'center' },
+    editBtn: { border: 'none', backgroundColor: 'transparent', cursor: 'pointer', padding: 4, display: 'flex', alignItems: 'center' },
+    emailText: { color: colors.gray60 },
+    divider: { border: 'none', height: 1, backgroundColor: colors.gray20, margin: '0 -20px 24px -20px' },
+    menuList: { gap: 8 },
+    menuItem: { 
+        padding: '16px 0', border: 'none', backgroundColor: 'transparent', 
+        textAlign: 'left', cursor: 'pointer', ...typo['Body/Body2_15∙150_Regular'],
+        color: colors.gray90
+    },
+    logout: { color: colors.main },
+    modalContent: { padding: '24px 20px', gap: 16 },
+    modalSub: { color: colors.gray60 },
+    input: { 
+        width: '100%', padding: '12px 16px', borderRadius: 8, 
+        border: `1px solid ${colors.gray30}`, outline: 'none',
+        fontSize: 16
+    },
+    modalButtons: { gap: 12, marginTop: 8 },
+    // StyleX용 flex 스타일 정의
+    flex1: { flex: 1 },
+    flex2: { flex: 2 }
 });

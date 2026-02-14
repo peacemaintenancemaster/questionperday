@@ -16,7 +16,7 @@ export const getQuestionMap = async (dateAt: string) => {
     const { data, error } = await supabase
         .from('question')
         .select('*')
-        .like('display_date', `${dateAt}%`);
+        .like('dateAt', `${dateAt}%`);
 
     if (error) throw error;
     const questionDateMap: Record<string, QuestionBaseSchemaWithId> = {};
@@ -103,7 +103,7 @@ export const getList = async (dateAt: string) => {
     const { data, error } = await supabase
         .from('question')
         .select('*')
-        .like('display_date', `${dateAt}%`);
+        .like('dateAt', `${dateAt}%`);
     if (error) throw error;
     return {
         questionList: (data || []).map((item) => ({

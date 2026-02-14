@@ -1,88 +1,60 @@
-import { supabase } from '../supabase';
-import type { QuestionBaseSchema } from '~/features/question/schema/question.add';
-import type { QuestionBaseSchemaWithId } from '~/features/question/context/question';
 
-export const getQuestionMap = async (dateAt: string) => {
-    const { data, error } = await supabase
-        .from('question')
-        .select('*')
-        .like('dateAt', `${dateAt}%`);
+import { supabase } from '..';
 
-    if (error) throw error;
-    const questionDateMap: Record<string, QuestionBaseSchemaWithId> = {};
-    
-    data?.forEach((item) => {
-        if (item.dateAt) {
-            questionDateMap[item.dateAt] = {
-                id: item.id,
-                title: item.title, 
-                dateAt: item.dateAt, 
-                subText: '',
-                article: '',
-            } as QuestionBaseSchemaWithId;
-        }
-    });
-    return { questionDateMap };
+import { IQuestion, TQuestionList } from '@/types/question';
+
+const TABLE_NAME = 'question';
+
+export const getQuestionList = async (dateAt: string) => {
+  const { data, error } = await supabase
+    .from(TABLE_NAME)
+    .select('*')
+    .gte('dateAt', `${dateAt} 00:00:00`)
+    .lte('dateAt', `${dateAt} 23:59:59`);
+
+  if (error) {
+    throw error;
+  }
+  return data as TQuestionList;
 };
 
-export const Del = async (id: number) => {
-    const { error } = await supabase.from('question').delete().eq('id', id);
-    if (error) throw error;
+export const getQuestion = async (id: number) => {
+  const { data, error } = await supabase.from(TABLE_NAME).select('*').eq('id', id).single();
+
+  if (error) {
+    throw error;
+  }
+  return data as IQuestion;
 };
 
-export const add = async (data: QuestionBaseSchema) => {
-    const { data: insertedData, error } = await supabase
-        .from('question')
-        .insert([{ 
-            dateAt: data.dateAt,
-            title: data.title || "",
-            subText: data.subText || "",
-            needNickname: data.needNickname ?? true,
-            needPhone: data.needPhone ?? false,
-            logoImageId: data.logoImageId || null,
-            article: data.article || null,
-            timeAt: data.timeAt || null,
-        }])
-        .select()
-        .single();
+export const createQuestion = async (question: Omit<IQuestion, 'id'>) => {
+  const { data, error } = await supabase.from(TABLE_NAME).insert(question).select('*').single();
 
-    if (error) {
-        throw error;
-    }
-    return insertedData;
+  if (error) {
+    throw error;
+  }
+  return data as IQuestion;
 };
 
-export const edit = async (id: number, data: QuestionBaseSchema) => {
-    const { data: updatedData, error } = await supabase
-        .from('question')
-        .update({ 
-            dateAt: data.dateAt,
-            subText: data.subText || "",
-            needNickname: data.needNickname ?? true,
-            needPhone: data.needPhone ?? false,
-            logoImageId: data.logoImageId || null,
-            article: data.article || null,
-            timeAt: data.timeAt || null,
-        })
-        .eq('id', id)
-        .select().single();
-    if (error) throw error;
-    return updatedData;
+export const updateQuestion = async (question: IQuestion) => {
+  const { data, error } = await supabase
+    .from(TABLE_NAME)
+    .update(question)
+    .eq('id', question.id)
+    .select('*')
+    .single();
+
+  if (error) {
+    throw error;
+  }
+  return data as IQuestion;
 };
 
-export const getList = async (dateAt: string) => {
-    const { data, error } = await supabase
-        .from('question')
-        .select('*')
-        .like('dateAt', `${dateAt}%`);
-    if (error) throw error;
-    return {
-        questionList: (data || []).map((item) => ({
-            id: item.id,
-            title: item.title,
-            dateAt: item.dateAt,
-            subText: '',
-            article: '',
-        })) as QuestionBaseSchemaWithId[],
-    };
+export const deleteQuestion = async (id: number) => {
+  const { data, error } = await supabase.from(TABLE_NAME).delete().eq('id', id).select('*').single();
+
+  if (error) {
+    throw error;
+  }
+  return data as IQuestion;
 };

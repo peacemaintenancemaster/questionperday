@@ -1,0 +1,1 @@
+import{s as i}from"./supabase-C7_hgrEP.js";async function u({params:r,request:e}){const{id:a}=r,s=new URL(e.url).searchParams.get("limit")||"10",{data:n,count:o,error:t}=await i.from("answers").select("*",{count:"exact"}).eq("question_id",a).limit(parseInt(s));return t?{error:t.message,status:500}:{data:n,metadata:{totalCount:o||0}}}u.hydrate=!0;export{u as clientLoader};

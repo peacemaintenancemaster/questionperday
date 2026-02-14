@@ -1,6 +1,7 @@
 import { supabase } from '~/lib/supabase';
 import { QuestionSchema } from '../schema';
 
+// [유틸] 한국 시간(KST) YYYY-MM-DD
 const getKSTDateString = () => {
     const now = new Date();
     const kstDate = new Date(now.getTime() + 9 * 60 * 60 * 1000);
@@ -10,12 +11,12 @@ const getKSTDateString = () => {
 export const getTodayInfo = async () => {
     const todayStr = getKSTDateString();
 
-    // [핵심 수정] 대소문자 섞인 컬럼("dateAt")은 반드시 쌍따옴표로 감싸야 인식됨
+    // 1. [수정] created_at 제거 (DB에 없음)
+    // 2. [수정] "dateAt", "timeAt" 가져오기 (따옴표 필수)
     const { data: question, error } = await supabase
-        .from('question') 
-        .select('id, created_at, "dateAt"') // "dateAt"으로 수정
-        .lte('"dateAt"', todayStr)          // "dateAt"으로 수정
-        .order('"dateAt"', { ascending: false }) // "dateAt"으로 수정
+        .from('question')
+        .select('id, "dateAt", "timeAt"') 
+        .eq('"dateAt"', todayStr) 
         .limit(1)
         .maybeSingle();
 
@@ -28,20 +29,22 @@ export const getTodayInfo = async () => {
         return { questionId: 0, timeAt: new Date().toISOString(), isAnswered: false };
     }
 
-    const deadline = new Date(new Date(question.created_at).getTime() + 24 * 60 * 60 * 1000).toISOString();
+    // 3. [수정] 마감 시간 계산 (created_at이 없으므로 dateAt 기준)
+    // 질문 날짜(2026-02-14)의 다음 날을 마감으로 설정
+    // 만약 timeAt(시간)이 있다면 그 시간 기준 24시간 뒤로 설정할 수도 있음
+    const baseDate = new Date(question.dateAt);
+    const deadline = new Date(baseDate.getTime() + 24 * 60 * 60 * 1000).toISOString();
 
     const { data: { session } } = await supabase.auth.getSession();
     let isAnswered = false;
     
     if (session?.user) {
-        // answer 테이블은 snake_case 컬럼이라고 가정 (question_id)
-        const { count, error: answerError } = await supabase
+        const { count } = await supabase
             .from('answer') 
             .select('*', { count: 'exact', head: true })
             .eq('question_id', question.id) 
             .eq('user_id', session.user.id);
         
-        if (answerError) console.error(answerError);
         isAnswered = !!count && count > 0;
     }
 
@@ -49,6 +52,7 @@ export const getTodayInfo = async () => {
 };
 
 export const getToday = async (id: number): Promise<{ question: QuestionSchema }> => {
+    // 상세 조회
     const { data, error } = await supabase
         .from('question')
         .select('*')
@@ -57,7 +61,8 @@ export const getToday = async (id: number): Promise<{ question: QuestionSchema }
     
     if (error || !data) throw new Error('질문을 찾을 수 없습니다.');
 
-    const deadline = new Date(new Date(data.created_at).getTime() + 24 * 60 * 60 * 1000).toISOString();
+    // [수정] 여기도 created_at 대신 dateAt 사용
+    const deadline = new Date(new Date(data.dateAt).getTime() + 24 * 60 * 60 * 1000).toISOString();
 
     return {
         question: {

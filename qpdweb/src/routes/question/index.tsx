@@ -3,7 +3,9 @@ import * as stylex from '@stylexjs/stylex';
 import { colors, flex, typo } from '~/shared/style/common.stylex';
 import { useState, useEffect } from 'react';
 import { supabase } from '~/lib/supabase';
-import { useUser } from '~/domain/user/store';
+import { useUser, useUserStore } from '~/domain/user/store';
+import useModal from '~/shared/hooks/useModal';
+import { LoginBottomSheet } from '~/shared/components/ui/bottom-sheet/login/login-bottom-sheet';
 
 export const Route = createFileRoute('/question/')({
   component: QuestionPage,
@@ -12,6 +14,9 @@ export const Route = createFileRoute('/question/')({
 function QuestionPage() {
   const navigate = useNavigate();
   const user = useUser();
+  const isLogin = useUserStore((s) => s.isLogin);
+  const loginModal = useModal('login');
+
   const [question, setQuestion] = useState<any>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [showNoQuestionModal, setShowNoQuestionModal] = useState(false);
@@ -20,6 +25,7 @@ function QuestionPage() {
   const [text, setText] = useState('');
   const [nickname, setNickname] = useState('');
   const [phone, setPhone] = useState('');
+  const [isPrivate, setIsPrivate] = useState(false);
   const [loading, setLoading] = useState(false);
 
   // 1. 오늘의 질문 가져오기
@@ -27,24 +33,21 @@ function QuestionPage() {
     const fetchTodayQuestion = async () => {
       setIsLoading(true);
       try {
-        // [수정] 한국 시간 기준 오늘 날짜 구하기
         const now = new Date();
         const kstDate = new Date(now.getTime() + 9 * 60 * 60 * 1000);
         const todayStr = kstDate.toISOString().split('T')[0];
 
-        // [수정] created_at 정렬 제거 -> dateAt 필터로 변경
         const { data, error } = await supabase
           .from('question')
           .select('*')
-          .eq('"dateAt"', todayStr) // created_at 대신 오늘 날짜로 찾기 (따옴표 필수)
+          .eq('"dateAt"', todayStr)
           .limit(1)
-          .maybeSingle(); // single 대신 maybeSingle 사용 (데이터 없어도 에러 안 나게)
+          .maybeSingle();
         
         if (error) {
           console.error('질문 조회 에러:', error);
           setShowNoQuestionModal(true);
         } else if (!data) {
-          // 데이터가 없는 경우
           setShowNoQuestionModal(true);
         } else {
           setQuestion(data);
@@ -59,8 +62,18 @@ function QuestionPage() {
     fetchTodayQuestion();
   }, []);
 
-  // 2. 답변하기 (닉네임/연락처 로직 적용)
+  const handleInteraction = () => {
+    if (!isLogin) {
+      loginModal.open();
+      return false;
+    }
+    return true;
+  };
+
+  // 2. 답변하기
   const handleSubmit = async () => {
+    if (!handleInteraction()) return;
+
     if (!text.trim()) {
       alert('답변 내용을 입력해주세요.');
       return;
@@ -70,15 +83,12 @@ function QuestionPage() {
 
     try {
       const { error } = await supabase.from('answer').insert({
-        questionId: question?.id, // 혹시 DB 컬럼이 question_id면 이걸로 수정 필요
-        userId: user?.id,         // 혹시 DB 컬럼이 user_id면 이걸로 수정 필요
+        '"questionId"': question?.id,
+        '"userId"': user?.id,
         text: text,
-        
-        // [핵심] 값이 없으면 빈 문자열로 저장 (에러 안 나게)
         nickname: nickname.trim() || '',
         phone: phone.trim() || '',
-        
-        isDel: 0,
+        '"isDel"': isPrivate ? 1 : 0,
       });
 
       if (error) throw error;
@@ -121,11 +131,9 @@ function QuestionPage() {
       {/* 질문 타이틀 */}
       <div {...stylex.props(styles.header)}>
         <p {...stylex.props(typo['Body/Body2_15∙150_Regular'], styles.dateText)}>
-          {/* DB에 dateAt이 있으므로 뒤쪽이 렌더링됨 */}
           {question.display_date || question.dateAt}
         </p>
         <h2 {...stylex.props(typo['Heading/H3_20∙130_SemiBold'], styles.title)}>
-          {/* DB에 title이 있으므로 뒤쪽이 렌더링됨 */}
           {question.content || question.title}
         </h2>
       </div>
@@ -136,12 +144,12 @@ function QuestionPage() {
         placeholder="오늘의 생각을 기록해보세요."
         value={text}
         onChange={(e) => setText(e.target.value)}
+        onFocus={handleInteraction}
       />
 
-      {/* [수정됨] 추가 정보 입력 (옵션에 따라 표시) */}
+      {/* 추가 정보 입력 */}
       <div {...stylex.props(styles.inputGroup, flex.column)}>
         
-        {/* 닉네임: 설정 켜져있으면 보임, 입력 안 해도 됨 */}
         {question.needNickname ? (
           <div {...stylex.props(styles.inputRow)}>
             <span {...stylex.props(styles.label)}>닉네임</span>
@@ -151,11 +159,11 @@ function QuestionPage() {
               placeholder="닉네임 (선택)"
               value={nickname}
               onChange={(e) => setNickname(e.target.value)}
+              onFocus={handleInteraction}
             />
           </div>
         ) : null}
 
-        {/* 연락처: 설정 켜져있으면 보임, 숫자만 입력됨 */}
         {question.needPhone ? (
           <div {...stylex.props(styles.inputRow)}>
             <span {...stylex.props(styles.label)}>연락처</span>
@@ -169,14 +177,38 @@ function QuestionPage() {
                 const onlyNum = e.target.value.replace(/[^0-9]/g, '');
                 setPhone(onlyNum);
               }}
+              onFocus={handleInteraction}
             />
           </div>
         ) : null}
+
+        <div {...stylex.props(styles.checkboxRow, flex.vertical)}>
+           <input
+            type="checkbox"
+            id="private-answer"
+            checked={isPrivate}
+            onChange={() => {
+              if (handleInteraction()) {
+                setIsPrivate(!isPrivate);
+              }
+            }}
+            {...stylex.props(styles.checkbox)}
+          />
+          <label htmlFor="private-answer" {...stylex.props(styles.checkboxLabel, typo['Body/Body3_14∙100_Regular'])}>
+            혼자서만 보는 답변으로 기록하기
+          </label>
+        </div>
       </div>
 
       <button {...stylex.props(styles.submitBtn)} onClick={handleSubmit}>
         <span style={{ color: '#fff' }}>기록하기</span>
       </button>
+
+      {!isLogin && (
+        <loginModal.Render type='bottomSheet' animationType='bottomSheet'>
+          <LoginBottomSheet />
+        </loginModal.Render>
+      )}
     </div>
   );
 }
@@ -196,6 +228,19 @@ const styles = stylex.create({
   input: {
     padding: '12px', borderRadius: 8, border: `1px solid ${colors.gray30}`,
     outline: 'none', fontSize: 14
+  },
+  checkboxRow: {
+    gap: 8,
+    cursor: 'pointer',
+  },
+  checkbox: {
+    width: 20,
+    height: 20,
+    cursor: 'pointer',
+  },
+  checkboxLabel: {
+    color: colors.gray80,
+    cursor: 'pointer',
   },
   submitBtn: {
     width: '100%', padding: 16, borderRadius: 12,

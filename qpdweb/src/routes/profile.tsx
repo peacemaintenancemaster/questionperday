@@ -10,6 +10,7 @@ import { Icon } from '~/shared/images';
 import { useModal } from '~/shared/hooks/useModal';
 import { useUser, useUserActions } from '~/domain/user/store';
 import { supabase } from '~/lib/supabase';
+import { LoginBottomSheet } from '~/shared/components/ui/bottom-sheet/login/login-bottom-sheet';
 
 export const Route = createFileRoute('/profile')({
 	component: ProfilePage,
@@ -41,10 +42,11 @@ function ProfilePage() {
 	const profileModal = useModal('profile-edit');
 	const inviteModal = useModal('invite-friends');
 	const withdrawModal = useModal('withdraw-confirm');
+	const loginModal = useModal('login');
 
 	const user = useUser();
-	const { setUser } = useUserActions();
-	
+	const { setUser, logout } = useUserActions();
+
 	// Profile edit state - 카카오톡 닉네임을 기본값으로 사용
 	const [nickname, setNickname] = useState(user?.name || '');
 	const [editNickname, setEditNickname] = useState(user?.name || '');
@@ -56,12 +58,24 @@ function ProfilePage() {
 		if (user?.name) {
 			setNickname(user.name);
 			setEditNickname(user.name);
+		} else {
+			setNickname('');
+			setEditNickname('');
 		}
-	}, [user?.name]);
+	}, [user]);
+
+	useEffect(() => {
+		if (!user) {
+			loginModal.open();
+		}
+	}, [user, loginModal]);
 
 	const handleProfileSave = async () => {
 		try {
-			const { data: { user: authUser }, error } = await supabase.auth.updateUser({
+			const {
+				data: { user: authUser },
+				error,
+			} = await supabase.auth.updateUser({
 				data: { name: editNickname },
 			});
 
@@ -72,7 +86,7 @@ function ProfilePage() {
 			if (user) {
 				setUser({ ...user, name: editNickname });
 			}
-			
+
 			setIsEditingNickname(false);
 			profileModal.close();
 		} catch (error) {
@@ -92,13 +106,35 @@ function ProfilePage() {
 	};
 
 	const handleLogout = async () => {
-		const { error } = await supabase.auth.signOut();
-		if (error) {
-			console.error('Error logging out:', error);
-			return;
+		try {
+			const { error } = await supabase.auth.signOut();
+			if (error) {
+				console.error('Error logging out:', error);
+				alert('로그아웃에 실패했습니다.');
+				return;
+			}
+
+			logout();
+			alert('로그아웃 되었습니다.');
+			navigate({ to: '/' });
+		} catch (err) {
+			console.error('Logout error:', err);
+			alert('로그아웃 중 오류가 발생했습니다.');
 		}
-		navigate({ to: '/' });
 	};
+
+	if (!user) {
+		return (
+			<section {...stylex.props(styles.base, flex.column, styles.center)}>
+				<p {...stylex.props(typo['Heading/H4_18∙100_SemiBold'], styles.primaryBlack)}>
+					로그인이 필요합니다.
+				</p>
+				<loginModal.Render type='bottomSheet' animationType='bottomSheet'>
+					<LoginBottomSheet />
+				</loginModal.Render>
+			</section>
+		);
+	}
 
 	return (
 		<section {...stylex.props(styles.base, flex.column)}>
@@ -133,7 +169,7 @@ function ProfilePage() {
 								typo['Body/Body3_14∙100_Regular'],
 								styles.gray80,
 							)}>
-							{user?.email || 'user@naver.com'}
+							{user?.email || ''}
 						</p>
 						<Icon.ArrowRight size='12' color='#9a9a9a' />
 					</div>
@@ -560,6 +596,19 @@ const styles = stylex.create({
 		padding: '24px 18px',
 		paddingBottom: 60,
 		gap: 0,
+	},
+	center: {
+		alignItems: 'center',
+		justifyContent: 'center',
+		height: 'calc(100vh - 120px)', // Adjust as needed
+	},
+	loginBtn: {
+		marginTop: 20,
+		padding: '12px 24px',
+		borderRadius: 8,
+		backgroundColor: colors.main,
+		color: 'white',
+		cursor: 'pointer',
 	},
 	profileCard: {
 		width: '100%',

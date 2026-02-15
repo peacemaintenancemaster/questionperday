@@ -55,6 +55,32 @@ export const Header = ({ variant, onClickCallback }: Props) => {
         router.history.back();
     };
 
+    // 공유 버튼 클릭 핸들러
+    const onClickShare = async () => {
+        const shareUrl = 'https://questionperday.me/question';
+        const shareText = '매일 하나씩 질문에 답하며 기록해보세요';
+
+        if (navigator.share) {
+            try {
+                await navigator.share({
+                    title: 'Question Per Day',
+                    text: shareText,
+                    url: shareUrl
+                });
+            } catch (err) {
+                console.log('공유 실패:', err);
+            }
+        } else {
+            // Web Share API를 지원하지 않는 경우 클립보드에 복사
+            try {
+                await navigator.clipboard.writeText(shareUrl);
+                alert('링크가 복사되었습니다!');
+            } catch (err) {
+                console.error('복사 실패:', err);
+            }
+        }
+    };
+
     return (
         <header {...styleX.props(styles.wrap, flex.between, flex.vertical)}>
             {/* 좌측: 뒤로가기 또는 로고 */}
@@ -93,6 +119,16 @@ export const Header = ({ variant, onClickCallback }: Props) => {
                         <Icon.Moon size='24' color={iconColor} />
                     )}
                 </button>
+
+                {/* 공유 버튼 - 질문 페이지에서만 표시 */}
+                {isQuestionPath && (
+                    <button
+                        {...styleX.props(styles.button)}
+                        onClick={onClickShare}
+                        aria-label='공유하기'>
+                        <Icon.Share size='24' color={iconColor} />
+                    </button>
+                )}
 
                 {/* 홈 또는 프로필 버튼 */}
                 {isQuestionPath || isProfilePath ? (

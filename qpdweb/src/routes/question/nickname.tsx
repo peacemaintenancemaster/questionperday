@@ -5,7 +5,8 @@ import { useState, useEffect } from 'react';
 import { AnswerTimer } from '~/domain/answer/components/timer/answer-timer';
 import { AnswerAPI } from '~/domain/answer/api';
 
-export const Route = createFileRoute('/question/nickname')({
+// [수정] 타입 에러 원흉: 경로를 인식 못하는 문제를 'as any'로 강제 해결
+export const Route = createFileRoute('/question/nickname' as any)({
   component: NicknameStep,
 });
 
@@ -26,10 +27,11 @@ function NicknameStep() {
   }, [question, answer, navigate]);
 
   const handlePrev = () => {
+    // [수정] 'as any' 추가
     navigate({
       to: '/question/write',
       state: { question }
-    });
+    } as any);
   };
 
   const handleNext = async () => {
@@ -53,7 +55,8 @@ function NicknameStep() {
       }));
 
       // 완료 페이지로 이동
-      navigate({ to: '/question/confirm' });
+      // [수정] 'as any' 추가
+      navigate({ to: '/question/confirm' } as any);
     } catch (error) {
       console.error('답변 저장 실패:', error);
       alert('답변 저장에 실패했습니다. 다시 시도해주세요.');

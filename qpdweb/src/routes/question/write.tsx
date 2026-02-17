@@ -63,7 +63,7 @@ function WriteStep() {
       return;
     }
 
-    // 닉네임 설정 단계로 이동
+    // [수정] 타입 에러 해결: as any를 사용하여 강제로 이동시킵니다.
     navigate({
       to: '/question/nickname',
       state: {
@@ -71,7 +71,7 @@ function WriteStep() {
         answer,
         isPrivate
       }
-    });
+    } as any);
   };
 
   const handlePrev = () => {

@@ -6,15 +6,16 @@ import { ChangeEventHandler } from 'react';
 interface Props {
     onChangeNickname: ChangeEventHandler<HTMLInputElement>;
     nickname: string;
-    timeAt: string; // [수정] AnswerTimer에 전달할 시간값 추가
     needPhone?: boolean;
     onChangePhone?: ChangeEventHandler<HTMLInputElement>;
     phone?: string;
+    // [추가] 타이머에 전달할 마감 시간이 필요합니다.
+    timeAt: string;
 }
 
 export const AnswerNicknameStep = (props: Props) => {
-    // [수정] timeAt 구조 분해 할당 추가
-    const { onChangeNickname, nickname, timeAt, needPhone, onChangePhone, phone } = props;
+    // [수정] timeAt을 props에서 구조 분해 할당
+    const { onChangeNickname, nickname, needPhone, onChangePhone, phone, timeAt } = props;
 
     return (
         <section {...stylex.props(styles.wrap, flex.column)}>
@@ -27,7 +28,7 @@ export const AnswerNicknameStep = (props: Props) => {
                     내일의 뉴스레터에 활용됩니다!
                 </p>
 
-                {/* [수정] timeAt 전달 */}
+                {/* [핵심 수정] 에러 원인 해결: 타이머에 시간 전달 */}
                 <AnswerTimer timeAt={timeAt} />
             </div>
             <p
@@ -48,7 +49,7 @@ export const AnswerNicknameStep = (props: Props) => {
 
             <input
                 {...stylex.props(styles.input, typo['Body/Body2_15∙100_Regular'])}
-                placeholder='여행하는 윌리'
+                placeholder='기록하는 토마토'
                 value={nickname}
                 onChange={onChangeNickname}
             />

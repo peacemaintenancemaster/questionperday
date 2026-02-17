@@ -4,7 +4,15 @@ import { immer } from 'zustand/middleware/immer';
 export interface User {
   id: number;
   email: string;
-  name: string;
+  nickname: string;
+  gender?: string;
+  phone?: string;
+  country?: string;
+  birthday?: string;
+  year?: string;
+  month?: string;
+  day?: string;
+  name?: string;
 }
 
 type Store = {

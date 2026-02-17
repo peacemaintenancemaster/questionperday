@@ -1,54 +1,34 @@
-import { supabase } from '~/api/supabase';
+import { z } from 'zod';
 import type { QuestionType } from '~/types/answer/answer';
 
-export type QuestionBaseSchema = {
-	title: string;
-	dateAt: string;
-	subText: string;
-	needNickname: boolean;
-	needPhone: boolean;
-	logoImageId?: number | null;
-	article?: string | null;
-	timeAt?: string;
-};
+// 1. 변수(스키마)를 먼저 정의합니다.
+export const questionBaseSchema = z.object({
+    id: z.number().optional(),
+    article: z.string().nullable(),
+    title: z.string().min(0),
+    subText: z.string().min(0),
+    dateAt: z.string(),
+    needPhone: z.boolean().optional().default(false),
+    needNickname: z.boolean().optional().default(false),
+    timeAt: z.string().optional(),
+    isTemp: z.boolean().optional(),
+    logoImageId: z.string().optional(),
+});
 
-export type QuestionAddSchema = QuestionBaseSchema;
+// 2. 정의된 변수에서 타입을 추출합니다.
+export type QuestionBaseSchema = z.infer<typeof questionBaseSchema>;
 
 export type QuestionSchemaWithType = QuestionBaseSchema & {
-	id: number;
-	type: QuestionType;
+    type?: QuestionType;
 };
 
-export const initBaseQuestion: QuestionBaseSchema = {
-	title: '',
-	dateAt: new Date().toISOString(),
-	subText: '',
-	needNickname: true, // 기본값 true로 설정
-	needPhone: false,
-	logoImageId: null,
-	article: null,
-	timeAt: '',
-};
-
-export const addQuestion = async (params: QuestionAddSchema) => {
-	// 테이블명을 'questions'로 수정하고 필드명도 맞춤
-	const { data, error } = await supabase
-		.from('question')
-		.insert({
-			content: params.title,
-			display_date: params.dateAt,
-			title: params.title || '',
-			subText: params.subText || '',
-			needNickname: params.needNickname ?? true,
-			needPhone: params.needPhone ?? false,
-			logoImageId: params.logoImageId || null,
-			article: params.article || null,
-			timeAt: params.timeAt || null,
-		});
-
-	if (error) {
-		console.error('Supabase 저장 에러:', error);
-		throw error;
-	}
-	return data;
+export const initBaseQuestion = {
+    title: '',
+    subText: '',
+    dateAt: new Date().toISOString().split('T')[0], // 클라이언트 규격 통일
+    needNickname: true,
+    logoImageId: '',
+    article: '',
+    needPhone: false,
+    timeAt: '',
 };

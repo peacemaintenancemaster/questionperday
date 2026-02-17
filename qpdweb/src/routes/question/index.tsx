@@ -40,15 +40,18 @@ function QuestionPage() {
   const [loading, setLoading] = useState(false);
 
   // 1. 오늘의 질문 가져오기 및 24시간 타이머 체크
+  // 1. 오늘의 질문 가져오기 및 24시간 타이머 체크
   useEffect(() => {
     const fetchTodayQuestion = async () => {
       setIsLoading(true);
       try {
         // 한국 시간 기준 오늘 날짜 구하기
+        // 한국 시간 기준 오늘 날짜 구하기
         const now = new Date();
         const kstDate = new Date(now.getTime() + 9 * 60 * 60 * 1000);
         const todayStr = kstDate.toISOString().split('T')[0];
 
+        // 오늘 날짜의 질문 가져오기
         // 오늘 날짜의 질문 가져오기
         const { data, error } = await supabase
           .from('question')
@@ -285,8 +288,9 @@ function QuestionPage() {
         </div>
       </div>
 
-      <button {...stylex.props(styles.submitBtn)} onClick={handleSubmit}>
-        <span style={{ color: '#fff' }}>기록하기</span>
+      {/* 하단 버튼 */}
+      <button {...stylex.props(styles.startButton)} onClick={handleStartAnswer}>
+        <span {...stylex.props(typo['Body/Body2_15∙150_Regular'])}>답변 보내기</span>
       </button>
 
       {!isLogin && (
@@ -408,16 +412,21 @@ const styles = stylex.create({
   },
   modalContent: {
     backgroundColor: colors.white,
+    backgroundColor: colors.white,
     borderRadius: 16,
+    padding: '32px 24px',
+    maxWidth: 340,
     padding: '32px 24px',
     maxWidth: 340,
     width: '100%',
     display: 'flex',
     flexDirection: 'column',
     gap: 20,
+    gap: 20,
     alignItems: 'center',
   },
   modalText: {
+    fontSize: 20,
     fontSize: 20,
     fontWeight: 600,
     color: colors.gray90,
@@ -436,10 +445,13 @@ const styles = stylex.create({
     width: '100%',
     padding: '16px',
     borderRadius: 12,
+    padding: '16px',
+    borderRadius: 12,
     backgroundColor: colors.main,
     color: '#fff',
     border: 'none',
     cursor: 'pointer',
+    fontSize: 15,
     fontSize: 15,
     fontWeight: 600,
   },
